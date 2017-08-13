@@ -1,7 +1,8 @@
 from __future__ import print_function
 
-import pwd
 import os
+import platform
+import pwd
 import tempfile
 import time
 import subprocess
@@ -10,10 +11,13 @@ from charmhelpers.core import templating
 
 from charms import reactive
 from charms.reactive import helpers as rhelpers
-from charmhelpers.core import hookenv
+from charmhelpers.core import hookenv, host
 
 from spcharms import repo as sprepo
 from spcharms import txn
+
+def block_conffile():
+	return '/etc/storpool.conf.d/storpool-cinder-block.conf'
 
 def rdebug(s):
 	with open('/tmp/storpool-charms.log', 'a') as f:
@@ -61,6 +65,7 @@ def enable_and_start():
 	hookenv.status_set('maintenance', 'installing the OpenStack integration into the running containers')
 	rdebug('installing into the running containers')
 
+	lxd_cinder = None
 	for lxd in txn.LXD.construct_all():
 		rdebug('- trying for "{name}"'.format(name=lxd.name))
 
@@ -78,6 +83,12 @@ def enable_and_start():
 				rdebug('    - {comp} not found'.format(comp=comp))
 				continue
 			rdebug('    - {comp} FOUND!'.format(comp=comp))
+			if comp == 'cinder' and lxd.name != '':
+				if lxd_cinder is None:
+					rdebug('     - and it is a Cinder one, stashing it...')
+					lxd_cinder = lxd
+				else:
+					rdebug('     - oof, found two Cinder LXDs, using "{first}" and not "{second}"'.format(first=lxd_cinder.name, second=lxd.name))
 
 			res = lxd.exec_with_output(['sp-openstack', '--', 'check', comp])
 			if res['res'] == 0:
@@ -90,6 +101,8 @@ def enable_and_start():
 			else:
 				rdebug('    - installing the rest of our packages into "{name}"'.format(name=lxd.name))
 				lxd.copy_package_trees('txn-install', 'python-storpool-spopenstack')
+				rdebug('    - and installing /etc/storpool.conf into "{name}"'.format(name=lxd.name))
+				lxd.txn.install_exact('/etc/storpool.conf', '/etc/storpool.conf')
 
 			rdebug('    - running sp-openstack install {comp}'.format(comp=comp))
 			res = lxd.exec_with_output(['sp-openstack', '-T', txn.module_name(), '--', 'install', comp])
@@ -101,6 +114,83 @@ def enable_and_start():
 		rdebug('  - done with "{name}"'.format(name=lxd.name))
 
 	rdebug('done with the running containers')
+
+	confname = block_conffile()
+	if lxd_cinder is not None:
+		rdebug('found a Cinder container at "{name}"'.format(name=lxd_cinder.name))
+		try:
+			rdebug('about to record the name of the Cinder LXD - "{name}" - into {confname}'.format(name=lxd_cinder.name, confname=confname))
+			dirname = os.path.dirname(confname)
+			rdebug('- checking for the {dirname} directory'.format(dirname=dirname))
+			if not os.path.isdir(dirname):
+				rdebug('  - nah, creating it')
+				os.mkdir(dirname, mode=0o755)
+
+			rdebug('- is the file there?')
+			okay = False
+			expected_contents = [
+				'[{node}]'.format(node=platform.node()),
+				'SP_EXTRA_FS=lxd:{name}'.format(name=lxd_cinder.name)
+			]
+			if os.path.isfile(confname):
+				rdebug('  - yes, it is... but does it contain the right data?')
+				with open(confname, mode='r') as conffile:
+					contents = list(map(lambda s: s.rstrip(), conffile.readlines()))
+					if contents == expected_contents:
+						rdebug('   - whee, it already does!')
+						okay = True
+					else:
+						rdebug('   - it does NOT: {lst}'.format(lst=contents))
+			else:
+				rdebug('   - nah...')
+				if os.path.exists(confname):
+					rdebug('     - but it still exists?!')
+					subprocess.call(['rm', '-rf', '--', confname])
+					if os.path.exists(confname):
+						rdebug('     - could not remove it, so leaving it alone, I guess')
+						okay = True
+
+			if not okay:
+				rdebug('- about to recreate the {confname} file'.format(confname=confname))
+				with open(confname, mode='w') as conffile:
+					print('\n'.join(expected_contents), file=conffile)
+				rdebug('- looks like we are done with it')
+				rdebug('- let us try to restart the storpool_block service (it may not even have been started yet, so ignore errors)')
+				try:
+					if host.service_running('storpool_block'):
+						rdebug('  - well, it does seem to be running, so restarting it')
+						host.service_restart('storpool_block')
+					else:
+						rdebug('  - nah, it was not running at all indeed')
+				except Exception as e:
+					rdebug('  - could not restart the service, but ignoring the error: {e}'.format(e=e))
+		except Exception as e:
+			rdebug('could not check for and/or recreate the {confname} storpool_block config file adapted the "{name}" LXD container: {e}'.format(confname=confname, name=lxd_cinder.name, e=e))
+	else:
+		rdebug('no Cinder LXD containers found, checking for any previously stored configuration...')
+		removed = False
+		if os.path.isfile(confname):
+			rdebug('- yes, {confname} exists, removing it'.format(confname=confname))
+			try:
+				os.unlink(confname)
+				removed = True
+			except Exception as e:
+				rdebug('could not remove {confname}: {e}'.format(confname=confname, e=e))
+		elif os.path.exists(confname):
+			rdebug('- well, {confname} exists, but it is not a file; removing it anyway'.format(confname=confname))
+			subprocess.call(['rm', '-rf', '--', confname])
+			removed = True
+		if removed:
+			rdebug('- let us try to restart the storpool_block service (it may not even have been started yet, so ignore errors)')
+			try:
+				if host.service_running('storpool_block'):
+					rdebug('  - well, it does seem to be running, so restarting it')
+					host.service_restart('storpool_block')
+				else:
+					rdebug('  - nah, it was not running at all indeed')
+			except Exception as e:
+				rdebug('  - could not restart the service, but ignoring the error: {e}'.format(e=e))
+
 	reactive.set_state('storpool-osi.installed-into-lxds')
 	hookenv.status_set('maintenance', '')
 
