@@ -152,8 +152,9 @@ def enable_and_start():
 
 			if not okay:
 				rdebug('- about to recreate the {confname} file'.format(confname=confname))
-				with open(confname, mode='w') as conffile:
-					print('\n'.join(expected_contents), file=conffile)
+				with tempfile.NamedTemporaryFile(dir='/tmp', mode='w+t') as spconf:
+					print('\n'.join(expected_contents), file=spconf)
+					txn.install('-o', 'root', '-g', 'root', '-m', '644', '--', spconf.name, confname)
 				rdebug('- looks like we are done with it')
 				rdebug('- let us try to restart the storpool_block service (it may not even have been started yet, so ignore errors)')
 				try:
