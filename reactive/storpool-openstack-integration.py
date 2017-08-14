@@ -11,7 +11,7 @@ from charmhelpers.core import templating
 
 from charms import reactive
 from charms.reactive import helpers as rhelpers
-from charmhelpers.core import hookenv, host
+from charmhelpers.core import hookenv, host, unitdata
 
 from spcharms import repo as sprepo
 from spcharms import txn
@@ -164,6 +164,7 @@ def enable_and_start():
 						rdebug('  - nah, it was not running at all indeed')
 				except Exception as e:
 					rdebug('  - could not restart the service, but ignoring the error: {e}'.format(e=e))
+			unitdata.kv().set('storpool-openstack-integration.lxd-name', lxd_cinder.name)
 		except Exception as e:
 			rdebug('could not check for and/or recreate the {confname} storpool_block config file adapted the "{name}" LXD container: {e}'.format(confname=confname, name=lxd_cinder.name, e=e))
 	else:
