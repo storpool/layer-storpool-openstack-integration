@@ -87,6 +87,8 @@ def enable_and_start():
 				if lxd_cinder is None:
 					rdebug('     - and it is a Cinder one, stashing it...')
 					lxd_cinder = lxd
+					rdebug('    - and installing /etc/storpool.conf into "{name}"'.format(name=lxd.name))
+					lxd.txn.install_exact('/etc/storpool.conf', '/etc/storpool.conf')
 				else:
 					rdebug('     - oof, found two Cinder LXDs, using "{first}" and not "{second}"'.format(first=lxd_cinder.name, second=lxd.name))
 
