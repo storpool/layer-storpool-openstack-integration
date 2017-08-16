@@ -2,5 +2,6 @@ name: layer-storpool-openstack-integration
 summary: Install the OpenStack integration into all the LXD containers
 maintainer: StorPool <support@storpool.com>
 description: |
-  FIXME: write something about this.
-  This layer installs a Debian package and copies all kinds of files around
+  This layer installs a Debian package and runs the StorPool OpenStack
+  integration modules into the main system ("the bare metal") and all
+  the LXD containers.
