@@ -3,6 +3,7 @@ from __future__ import print_function
 import os
 import platform
 import pwd
+import re
 import tempfile
 import time
 import subprocess
@@ -65,6 +66,18 @@ def enable_and_start():
 	hookenv.status_set('maintenance', 'installing the OpenStack integration into the running containers')
 	rdebug('installing into the running containers')
 
+	try:
+		ourid_outb = subprocess.check_output(['storpool_showconf', '-e', '-n', 'SP_OURID'])
+		ourid_lines = ourid_outb.decode().split('\n')
+		if len(ourid_lines) != 2 or ourid_lines[1] != '' or not re.match('(?: 0 | [1-9][0-9]* ) $', ourid_lines[0], re.X):
+			rdebug('- could not determine the StorPool SP_OURID setting, bailing out')
+			return
+		sp_ourid = ourid_lines[0]
+	except Exception as e:
+		rdebug('- could not run storpool_showconf to determine the StorPool SP_OURID setting: {e}'.format(e=e))
+		return
+	rdebug('- got SP_OURID {ourid}'.format(ourid=sp_ourid))
+
 	lxd_cinder = None
 	for lxd in txn.LXD.construct_all():
 		rdebug('- trying for "{name}"'.format(name=lxd.name))
@@ -105,6 +118,18 @@ def enable_and_start():
 				lxd.copy_package_trees('txn-install', 'python-storpool-spopenstack')
 				rdebug('    - and installing /etc/storpool.conf into "{name}"'.format(name=lxd.name))
 				lxd.txn.install_exact('/etc/storpool.conf', '/etc/storpool.conf')
+
+				cfgdir = '/etc/storpool.conf.d'
+				pfxdir = lxd.prefix + cfgdir
+				if not os.path.isdir(pfxdir):
+					rdebug('    - and creating the {pfxdir} directory'.format(pfxdir=pfxdir))
+					os.mkdir(pfxdir, mode=0o755)
+				cfgname = cfgdir + '/storpool-cinder-ourid.conf'
+				rdebug('    - and generating the {cfgname} file in "{name}"'.format(cfgname=cfgname, name=lxd.name))
+				with tempfile.NamedTemporaryFile(dir='/tmp', mode='w+t') as spouridconf:
+					print('[{name}]\nSP_OURID={ourid}'.format(name=lxd.name, ourid=sp_ourid), file=spouridconf)
+					spouridconf.flush()
+					lxd.txn.install('-o', 'root', '-g', 'root', '-m', '644', '--', spouridconf.name, cfgname)
 
 			rdebug('    - running sp-openstack install {comp}'.format(comp=comp))
 			res = lxd.exec_with_output(['sp-openstack', '-T', txn.module_name(), '--', 'install', comp])
