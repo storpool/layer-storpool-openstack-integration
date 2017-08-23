@@ -50,7 +50,7 @@ def install_package():
 
 	if newly_installed:
 		rdebug('it seems we managed to install some packages: {names}'.format(names=newly_installed))
-		sprepo.record_packages(newly_installed)
+		sprepo.record_packages('storpool-osi', newly_installed)
 	else:
 		rdebug('it seems that all the packages were installed already')
 
@@ -225,6 +225,9 @@ def remove_states_on_upgrade():
 def remove_leftovers():
 	rdebug('storpool-osi.stop invoked')
 	reactive.remove_state('storpool-osi.stop')
+
+	rdebug('uninstalling any OpenStack-related StorPool packages')
+	sprepo.unrecord_packages('storpool-osi')
 
 	if not rhelpers.is_state('storpool-osi.no-propagate-stop'):
 		rdebug('letting storpool-common know')
