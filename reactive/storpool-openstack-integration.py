@@ -16,13 +16,13 @@ from charmhelpers.core import hookenv, host, unitdata
 
 from spcharms import repo as sprepo
 from spcharms import txn
+from spcharms import utils as sputils
 
 def block_conffile():
 	return '/etc/storpool.conf.d/storpool-cinder-block.conf'
 
 def rdebug(s):
-	with open('/tmp/storpool-charms.log', 'a') as f:
-		print('{tm} [openstack-integration] {s}'.format(tm=time.ctime(), s=s), file=f)
+	sputils.rdebug(s, prefix='openstack-integration')
 
 openstack_components = ['cinder', 'os_brick', 'nova']
 
