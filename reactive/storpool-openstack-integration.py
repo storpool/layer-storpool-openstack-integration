@@ -105,12 +105,6 @@ def enable_and_start():
 				else:
 					rdebug('     - oof, found two Cinder LXDs, using "{first}" and not "{second}"'.format(first=lxd_cinder.name, second=lxd.name))
 
-			res = lxd.exec_with_output(['sp-openstack', '--', 'check', comp])
-			if res['res'] == 0:
-				rdebug('    - {comp} integration already there'.format(comp=comp))
-				continue
-			rdebug('    - {comp} MISSING integration'.format(comp=comp))
-
 			if lxd.name == '':
 				rdebug('    - no need to copy more packages into "{name}"'.format(name=lxd.name))
 			else:
@@ -131,10 +125,15 @@ def enable_and_start():
 					spouridconf.flush()
 					lxd.txn.install('-o', 'root', '-g', 'root', '-m', '644', '--', spouridconf.name, cfgname)
 
-			rdebug('    - running sp-openstack install {comp}'.format(comp=comp))
-			res = lxd.exec_with_output(['sp-openstack', '-T', txn.module_name(), '--', 'install', comp])
-			if res['res'] != 0:
-				raise Exception('Could not install the StorPool OpenStack integration for {comp} in the "{name}" container'.format(comp=comp, name=lxd.name))
+			res = lxd.exec_with_output(['sp-openstack', '--', 'check', comp])
+			if res['res'] == 0:
+				rdebug('    - {comp} integration already there'.format(comp=comp))
+			else:
+				rdebug('    - {comp} MISSING integration'.format(comp=comp))
+				rdebug('    - running sp-openstack install {comp}'.format(comp=comp))
+				res = lxd.exec_with_output(['sp-openstack', '-T', txn.module_name(), '--', 'install', comp])
+				if res['res'] != 0:
+					raise Exception('Could not install the StorPool OpenStack integration for {comp} in the "{name}" container'.format(comp=comp, name=lxd.name))
 
 			rdebug('    - done with {comp}'.format(comp=comp))
 
@@ -181,6 +180,7 @@ def enable_and_start():
 				rdebug('- about to recreate the {confname} file'.format(confname=confname))
 				with tempfile.NamedTemporaryFile(dir='/tmp', mode='w+t') as spconf:
 					print('\n'.join(expected_contents), file=spconf)
+					spconf.flush()
 					txn.install('-o', 'root', '-g', 'root', '-m', '644', '--', spconf.name, confname)
 				rdebug('- looks like we are done with it')
 				rdebug('- let us try to restart the storpool_block service (it may not even have been started yet, so ignore errors)')
