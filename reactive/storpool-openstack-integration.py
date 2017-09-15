@@ -79,6 +79,7 @@ def enable_and_start():
 	rdebug('- got SP_OURID {ourid}'.format(ourid=sp_ourid))
 
 	lxd_cinder = None
+	nova_found = False
 	for lxd in txn.LXD.construct_all():
 		rdebug('- trying for "{name}"'.format(name=lxd.name))
 
@@ -96,6 +97,7 @@ def enable_and_start():
 				rdebug('    - {comp} not found'.format(comp=comp))
 				continue
 			rdebug('    - {comp} FOUND!'.format(comp=comp))
+
 			if comp == 'cinder' and lxd.name != '':
 				if lxd_cinder is None:
 					rdebug('     - and it is a Cinder one, stashing it...')
@@ -104,6 +106,10 @@ def enable_and_start():
 					lxd.txn.install_exact('/etc/storpool.conf', '/etc/storpool.conf')
 				else:
 					rdebug('     - oof, found two Cinder LXDs, using "{first}" and not "{second}"'.format(first=lxd_cinder.name, second=lxd.name))
+
+			if comp == 'nova' and lxd.name == '':
+				nova_found = True
+				rdebug('     - found Nova on bare metal, will try to restart it')
 
 			if lxd.name == '':
 				rdebug('    - no need to copy more packages into "{name}"'.format(name=lxd.name))
@@ -219,6 +225,15 @@ def enable_and_start():
 					rdebug('  - nah, it was not running at all indeed')
 			except Exception as e:
 				rdebug('  - could not restart the service, but ignoring the error: {e}'.format(e=e))
+
+	if nova_found:
+		rdebug('Found Nova on bare metal, trying to restart nova-compute')
+		rdebug('(errors will be ignored)')
+		res = subprocess.call(['service', 'nova-compute', 'restart'])
+		if res == 0:
+			rdebug('Well, looks like it was restarted successfully')
+		else:
+			rdebug('"service nova-compute restart" returned a non-zero exit code {res}, ignoring it'.format(res=res))
 
 	reactive.set_state('storpool-osi.installed-into-lxds')
 	hookenv.status_set('maintenance', '')
