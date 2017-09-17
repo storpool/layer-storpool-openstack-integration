@@ -1,0 +1,4 @@
+options:
+  storpool_openstack_version:
+    type: string
+    description: The version of the StorPool OpenStack integration Ubuntu packages to install.

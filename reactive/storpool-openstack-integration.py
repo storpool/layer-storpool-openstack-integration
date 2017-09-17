@@ -24,9 +24,32 @@ def block_conffile():
 def rdebug(s):
 	sputils.rdebug(s, prefix='openstack-integration')
 
+@reactive.hook('config-changed')
+def config_changed():
+	rdebug('config-changed happened')
+	config = hookenv.config()
+
+	spver = config.get('storpool_version', None)
+	rdebug('and we do{xnot} have a storpool_version setting'.format(xnot=' not' if spver is None else ''))
+	sposiver = config.get('storpool_openstack_version', None)
+	rdebug('and we do{xnot} have a storpool_openstack_version setting'.format(xnot=' not' if sposiver is None else ''))
+	if spver is None or sposiver is None:
+		rdebug('removing the config-available state')
+		reactive.remove_state('storpool-osi.config-available')
+		reactive.remove_state('storpool-osi.package-installed')
+		return
+
+	rdebug('setting the config-available state')
+	reactive.set_state('storpool-osi.config-available')
+
+	if (config.changed('storpool_version') or config.changed('storpool_openstack_version')) and rhelpers.is_state('storpool-osi.package-installed'):
+		rdebug('the StorPool component versions have changed, removing the package-installed state')
+		reactive.remove_state('storpool-osi.package-installed')
+
 openstack_components = ['cinder', 'os_brick', 'nova']
 
 @reactive.when('storpool-repo-add.available', 'storpool-common.config-written')
+@reactive.when('storpool-osi.config-available')
 @reactive.when_not('storpool-osi.package-installed')
 @reactive.when_not('storpool-osi.stopped')
 def install_package():
@@ -34,15 +57,19 @@ def install_package():
 
 	hookenv.status_set('maintenance', 'obtaining the requested StorPool version')
 	spver = hookenv.config().get('storpool_version', None)
+	sposiver = hookenv.config().get('storpool_openstack_version', None)
 	if spver is None or spver == '':
 		rdebug('no storpool_version key in the charm config yet')
+		return
+	if sposiver is None or sposiver == '':
+		rdebug('no storpool_openstack_version key in the charm config yet')
 		return
 
 	hookenv.status_set('maintenance', 'installing the StorPool OpenStack packages')
 	(err, newly_installed) = sprepo.install_packages({
 		'storpool-block': spver,
 		'python-storpool-spopenstack': spver,
-		'storpool-openstack-integration': '1.2.0-1~1ubuntu1',
+		'storpool-openstack-integration': sposiver,
 	})
 	if err is not None:
 		rdebug('oof, we could not install packages: {err}'.format(err=err))
