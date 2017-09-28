@@ -1,1 +1,2 @@
+repo: https://github.com/storpool/layer-storpool-openstack-integration.git
 includes: ['layer:basic', 'layer:storpool-helper', 'layer:storpool-repo-add', 'layer:storpool-config', 'layer:storpool-common']
