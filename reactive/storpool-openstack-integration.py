@@ -1,3 +1,7 @@
+"""
+A Juju charm layer that installs the StorPool OpenStack integration into
+the current node and, if configured, its LXD containers.
+"""
 from __future__ import print_function
 
 import os
@@ -16,15 +20,26 @@ from spcharms import utils as sputils
 
 
 def block_conffile():
+    """
+    Return the name of the configuration file that will be generated for
+    the `storpool_block` service in order to also export the block devices
+    into the host's LXD containers.
+    """
     return '/etc/storpool.conf.d/storpool-cinder-block.conf'
 
 
 def rdebug(s):
+    """
+    Pass the diagnostic message string `s` to the central diagnostic logger.
+    """
     sputils.rdebug(s, prefix='openstack-integration')
 
 
 @reactive.hook('config-changed')
 def config_changed():
+    """
+    Check if all the configuration settings have been supplied and/or changed.
+    """
     rdebug('config-changed happened')
     config = hookenv.config()
 
@@ -59,6 +74,9 @@ openstack_components = ['cinder', 'os_brick', 'nova']
 @reactive.when_not('storpool-osi.package-installed')
 @reactive.when_not('storpool-osi.stopped')
 def install_package():
+    """
+    Install the StorPool OpenStack integration Ubuntu packages.
+    """
     rdebug('the OpenStack integration repo has become available and '
            'the common packages have been configured')
 
@@ -101,6 +119,10 @@ def install_package():
 @reactive.when_not('storpool-osi.installed-into-lxds')
 @reactive.when_not('storpool-osi.stopped')
 def enable_and_start():
+    """
+    Run the StorPool OpenStack integration on the current node and,
+    if configured, its LXD containers.
+    """
     hookenv.status_set('maintenance',
                        'installing the OpenStack integration into '
                        'the running containers')
@@ -337,6 +359,9 @@ def enable_and_start():
 @reactive.when_not('storpool-osi.package-installed')
 @reactive.when_not('storpool-osi.stopped')
 def restart():
+    """
+    Rerun the installation of the OpenStack integration.
+    """
     reactive.remove_state('storpool-osi.installed-into-lxds')
 
 
@@ -344,10 +369,16 @@ def restart():
 @reactive.when_not('storpool-common.config-written')
 @reactive.when_not('storpool-osi.stopped')
 def reinstall():
+    """
+    Rerun both the package installation and the configuration itself.
+    """
     reactive.remove_state('storpool-osi.package-installed')
 
 
 def reset_states():
+    """
+    Rerun everything.
+    """
     rdebug('state reset requested')
     reactive.remove_state('storpool-osi.package-installed')
     reactive.remove_state('storpool-osi.installed-into-lxds')
@@ -355,6 +386,9 @@ def reset_states():
 
 @reactive.hook('upgrade-charm')
 def remove_states_on_upgrade():
+    """
+    Rerun everything on charm upgrade.
+    """
     rdebug('storpool-osi.upgrade-charm invoked')
     reset_states()
 
@@ -362,6 +396,12 @@ def remove_states_on_upgrade():
 @reactive.when('storpool-osi.stop')
 @reactive.when_not('storpool-osi.stopped')
 def remove_leftovers():
+    """
+    Clean up on deinstallation.
+    If the "storpool-osi.no-propagate-stop" reactive state is set,
+    do not set the "stop" states for the lower layers; the uppper layers or
+    charms have taken care of that.
+    """
     rdebug('storpool-osi.stop invoked')
     reactive.remove_state('storpool-osi.stop')
 
