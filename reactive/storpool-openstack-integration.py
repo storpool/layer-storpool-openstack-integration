@@ -14,11 +14,14 @@ from spcharms import repo as sprepo
 from spcharms import txn
 from spcharms import utils as sputils
 
+
 def block_conffile():
     return '/etc/storpool.conf.d/storpool-cinder-block.conf'
 
+
 def rdebug(s):
     sputils.rdebug(s, prefix='openstack-integration')
+
 
 @reactive.hook('config-changed')
 def config_changed():
@@ -42,7 +45,9 @@ def config_changed():
         rdebug('the StorPool component versions have changed, removing the package-installed state')
         reactive.remove_state('storpool-osi.package-installed')
 
+
 openstack_components = ['cinder', 'os_brick', 'nova']
+
 
 @reactive.when('storpool-repo-add.available', 'storpool-common.config-written')
 @reactive.when('storpool-osi.config-available')
@@ -81,6 +86,7 @@ def install_package():
     rdebug('setting the package-installed state')
     reactive.set_state('storpool-osi.package-installed')
     hookenv.status_set('maintenance', '')
+
 
 @reactive.when('storpool-osi.package-installed')
 @reactive.when_not('storpool-osi.installed-into-lxds')
@@ -261,11 +267,13 @@ def enable_and_start():
     reactive.set_state('storpool-osi.installed-into-lxds')
     hookenv.status_set('maintenance', '')
 
+
 @reactive.when('storpool-osi.installed-into-lxds')
 @reactive.when_not('storpool-osi.package-installed')
 @reactive.when_not('storpool-osi.stopped')
 def restart():
     reactive.remove_state('storpool-osi.installed-into-lxds')
+
 
 @reactive.when('storpool-osi.package-installed')
 @reactive.when_not('storpool-common.config-written')
@@ -273,15 +281,18 @@ def restart():
 def reinstall():
     reactive.remove_state('storpool-osi.package-installed')
 
+
 def reset_states():
     rdebug('state reset requested')
     reactive.remove_state('storpool-osi.package-installed')
     reactive.remove_state('storpool-osi.installed-into-lxds')
 
+
 @reactive.hook('upgrade-charm')
 def remove_states_on_upgrade():
     rdebug('storpool-osi.upgrade-charm invoked')
     reset_states()
+
 
 @reactive.when('storpool-osi.stop')
 @reactive.when_not('storpool-osi.stopped')
