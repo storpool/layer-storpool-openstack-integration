@@ -2,13 +2,9 @@ from __future__ import print_function
 
 import os
 import platform
-import pwd
 import re
 import tempfile
-import time
 import subprocess
-
-from charmhelpers.core import templating
 
 from charms import reactive
 from charms.reactive import helpers as rhelpers
