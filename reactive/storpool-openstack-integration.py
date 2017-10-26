@@ -15,6 +15,7 @@ from charms.reactive import helpers as rhelpers
 from charmhelpers.core import hookenv, host, unitdata
 
 from spcharms import repo as sprepo
+from spcharms import status as spstatus
 from spcharms import txn
 from spcharms import utils as sputils
 
@@ -80,8 +81,7 @@ def install_package():
     rdebug('the OpenStack integration repo has become available and '
            'the common packages have been configured')
 
-    hookenv.status_set('maintenance',
-                       'obtaining the requested StorPool version')
+    spstatus.npset('maintenance', 'obtaining the requested StorPool version')
     spver = hookenv.config().get('storpool_version', None)
     sposiver = hookenv.config().get('storpool_openstack_version', None)
     if spver is None or spver == '':
@@ -91,8 +91,7 @@ def install_package():
         rdebug('no storpool_openstack_version key in the charm config yet')
         return
 
-    hookenv.status_set('maintenance',
-                       'installing the StorPool OpenStack packages')
+    spstatus.npset('maintenance', 'installing the StorPool OpenStack packages')
     (err, newly_installed) = sprepo.install_packages({
         'storpool-block': spver,
         'python-storpool-spopenstack': spver,
@@ -112,7 +111,7 @@ def install_package():
 
     rdebug('setting the package-installed state')
     reactive.set_state('storpool-osi.package-installed')
-    hookenv.status_set('maintenance', '')
+    spstatus.npset('maintenance', '')
 
 
 @reactive.when('storpool-osi.package-installed')
@@ -123,9 +122,8 @@ def enable_and_start():
     Run the StorPool OpenStack integration on the current node and,
     if configured, its LXD containers.
     """
-    hookenv.status_set('maintenance',
-                       'installing the OpenStack integration into '
-                       'the running containers')
+    spstatus.npset('maintenance', 'installing the OpenStack integration into '
+                   'the running containers')
     rdebug('installing into the running containers')
 
     try:
@@ -352,7 +350,7 @@ def enable_and_start():
                    'a non-zero exit code {res}, ignoring it'.format(res=res))
 
     reactive.set_state('storpool-osi.installed-into-lxds')
-    hookenv.status_set('maintenance', '')
+    spstatus.npset('maintenance', '')
 
 
 @reactive.when('storpool-osi.installed-into-lxds')
@@ -380,6 +378,7 @@ def reset_states():
     Rerun everything.
     """
     rdebug('state reset requested')
+    spstatus.reset_unless_error()
     reactive.remove_state('storpool-osi.package-installed')
     reactive.remove_state('storpool-osi.installed-into-lxds')
 
