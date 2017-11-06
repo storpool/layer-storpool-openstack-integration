@@ -6,7 +6,7 @@ A set of unit tests for the storpool-openstack-integration layer.
 
 import os
 import sys
-import testtools
+import unittest
 
 import mock
 
@@ -120,7 +120,7 @@ CONFIG_STATE = 'storpool-osi.config-available'
 INSTALLED_STATE = 'storpool-osi.package-installed'
 
 
-class TestStorPoolOpenStack(testtools.TestCase):
+class TestStorPoolOpenStack(unittest.TestCase):
     """
     Test various aspects of the storpool-openstack-integration layer.
     """
