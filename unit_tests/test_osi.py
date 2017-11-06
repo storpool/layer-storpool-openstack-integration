@@ -151,8 +151,30 @@ class TestStorPoolOpenStack(unittest.TestCase):
         testee.config_changed()
         self.assertEquals(set(), r_state.r_get_states())
 
+        r_config.r_set('storpool_version', '', False)
+        r_state.r_set_states(states['all'])
+        testee.config_changed()
+        self.assertEquals(set(), r_state.r_get_states())
+
+        r_config.r_clear_config()
+        r_config.r_set('storpool_openstack_version', '', False)
+        r_state.r_set_states(states['all'])
+        testee.config_changed()
+        self.assertEquals(set(), r_state.r_get_states())
+
+        r_config.r_set('storpool_version', '', False)
+        r_state.r_set_states(states['all'])
+        testee.config_changed()
+        self.assertEquals(set(), r_state.r_get_states())
+
         # ...or if only the storpool_version is defined
+        r_config.r_clear_config()
         r_config.r_set('storpool_version', '0.1.0', False)
+        r_state.r_set_states(states['all'])
+        testee.config_changed()
+        self.assertEquals(set(), r_state.r_get_states())
+
+        r_config.r_set('storpool_openstack_version', '', False)
         r_state.r_set_states(states['all'])
         testee.config_changed()
         self.assertEquals(set(), r_state.r_get_states())
@@ -160,6 +182,11 @@ class TestStorPoolOpenStack(unittest.TestCase):
         # ...or if only the storpool_openstack_version is defined
         r_config.r_clear_config()
         r_config.r_set('storpool_openstack_version', '0.1.0', False)
+        r_state.r_set_states(states['all'])
+        testee.config_changed()
+        self.assertEquals(set(), r_state.r_get_states())
+
+        r_config.r_set('storpool_version', '', False)
         r_state.r_set_states(states['all'])
         testee.config_changed()
         self.assertEquals(set(), r_state.r_get_states())

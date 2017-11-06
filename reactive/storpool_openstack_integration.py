@@ -50,7 +50,7 @@ def config_changed():
     sposiver = config.get('storpool_openstack_version', None)
     rdebug('and we do{xnot} have a storpool_openstack_version setting'
            .format(xnot=' not' if sposiver is None else ''))
-    if spver is None or sposiver is None:
+    if spver is None or spver == '' or sposiver is None or sposiver == '':
         rdebug('removing the config-available state')
         reactive.remove_state('storpool-osi.config-available')
         reactive.remove_state('storpool-osi.package-installed')
