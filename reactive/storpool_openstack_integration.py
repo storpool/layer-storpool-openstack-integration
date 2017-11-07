@@ -6,7 +6,6 @@ from __future__ import print_function
 
 import os
 import platform
-import re
 import tempfile
 import subprocess
 
@@ -14,6 +13,7 @@ from charms import reactive
 from charms.reactive import helpers as rhelpers
 from charmhelpers.core import hookenv, host, unitdata
 
+from spcharms import config as spconfig
 from spcharms import repo as sprepo
 from spcharms import status as spstatus
 from spcharms import txn
@@ -126,20 +126,7 @@ def enable_and_start():
                    'the running containers')
     rdebug('installing into the running containers')
 
-    try:
-        ourid_outb = subprocess.check_output(['storpool_showconf', '-e', '-n',
-                                              'SP_OURID'])
-        ourid_lines = ourid_outb.decode().split('\n')
-        if len(ourid_lines) != 2 or ourid_lines[1] != '' or \
-           not re.match('(?: 0 | [1-9][0-9]* ) $', ourid_lines[0], re.X):
-            rdebug('- could not determine the StorPool SP_OURID setting, '
-                   'bailing out')
-            return
-        sp_ourid = ourid_lines[0]
-    except Exception as e:
-        rdebug('- could not run storpool_showconf to determine the StorPool '
-               'SP_OURID setting: {e}'.format(e=e))
-        return
+    sp_ourid = spconfig.get_our_id()
     rdebug('- got SP_OURID {ourid}'.format(ourid=sp_ourid))
 
     lxd_cinder = None

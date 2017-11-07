@@ -20,6 +20,7 @@ lib_path = os.path.realpath('unit_tests/lib')
 if lib_path not in sys.path:
     sys.path.insert(0, lib_path)
 
+from spcharms import config as spconfig
 from spcharms import repo as sprepo
 from spcharms import status as spstatus
 from spcharms import txn
@@ -311,22 +312,16 @@ class TestStorPoolOpenStack(unittest.TestCase):
         count_npset = spstatus.npset.call_count
         count_construct = txn.LXD.construct_all.call_count
 
-        # Fail if we cannot get the StorPool configuration
-        check_output.return_value = b''
-        testee.enable_and_start()
-        self.assertEquals(count_npset + 1, spstatus.npset.call_count)
-        self.assertEquals(count_construct, txn.LXD.construct_all.call_count)
-
-        # OK, supply a SP_OURID value, but... there are no containers!
+        # There are no containers!
         # (so, yeah, strictiy this cannot happen, there would always be
         #  the bare metal environment, but oh well)
-        check_output.return_value = '1\n'.encode()
+        spconfig.get_our_id.return_value = '1'
         txn.LXD.construct_all.return_value = []
         isfile.return_value = False
         isdir.return_value = True
         exists.return_value = False
         testee.enable_and_start()
-        self.assertEquals(count_npset + 3, spstatus.npset.call_count)
+        self.assertEquals(count_npset + 2, spstatus.npset.call_count)
         self.assertEquals(count_construct + 1,
                           txn.LXD.construct_all.call_count)
 
