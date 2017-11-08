@@ -14,6 +14,7 @@ from charms.reactive import helpers as rhelpers
 from charmhelpers.core import hookenv, host, unitdata
 
 from spcharms import config as spconfig
+from spcharms import kvdata
 from spcharms import repo as sprepo
 from spcharms import status as spstatus
 from spcharms import txn
@@ -261,8 +262,7 @@ def create_block_conffile():
                 except Exception as e:
                     rdebug('  - could not restart the service, but '
                            'ignoring the error: {e}'.format(e=e))
-            unitdata.kv().set('storpool-openstack-integration.lxd-name',
-                              lxd_cinder.name)
+            unitdata.kv().set(kvdata.KEY_LXD_NAME, lxd_cinder.name)
         except Exception as e:
             rdebug('could not check for and/or recreate the {confname} '
                    'storpool_block config file adapted the "{name}" '
