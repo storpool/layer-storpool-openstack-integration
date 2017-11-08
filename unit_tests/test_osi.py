@@ -262,12 +262,25 @@ class TestStorPoolOpenStack(unittest.TestCase):
         self.assertEquals(count_record, sprepo.record_packages.call_count)
         self.assertEquals(set(), r_state.r_get_states())
 
-        # Okay, now let's give it something to install... and fail.
+        # Now give it something to install, but tell it not to.
         r_config.r_set('storpool_version', '0.1.0', False)
         r_config.r_set('storpool_openstack_version', '3.2.1', False)
+        r_config.r_set('storpool_openstack_install', False, False)
+        testee.install_package()
+        self.assertEquals(count_npset + 2, spstatus.npset.call_count)
+        self.assertEquals(count_install, sprepo.install_packages.call_count)
+        self.assertEquals(count_record, sprepo.record_packages.call_count)
+        self.assertEquals(set([INSTALLED_STATE]), r_state.r_get_states())
+
+        # Okay, now let's give it something to install... and fail.
+        r_state.r_set_states(set())
+        r_config.r_clear_config()
+        r_config.r_set('storpool_version', '0.1.0', False)
+        r_config.r_set('storpool_openstack_version', '3.2.1', False)
+        r_config.r_set('storpool_openstack_install', True, False)
         sprepo.install_packages.return_value = ('oops', [])
         testee.install_package()
-        self.assertEquals(count_npset + 3, spstatus.npset.call_count)
+        self.assertEquals(count_npset + 4, spstatus.npset.call_count)
         self.assertEquals(count_install + 1,
                           sprepo.install_packages.call_count)
         self.assertEquals(count_record, sprepo.record_packages.call_count)
@@ -276,7 +289,7 @@ class TestStorPoolOpenStack(unittest.TestCase):
         # Right, now let's pretend that there was nothing to install
         sprepo.install_packages.return_value = (None, [])
         testee.install_package()
-        self.assertEquals(count_npset + 6, spstatus.npset.call_count)
+        self.assertEquals(count_npset + 7, spstatus.npset.call_count)
         self.assertEquals(count_install + 2,
                           sprepo.install_packages.call_count)
         self.assertEquals(count_record, sprepo.record_packages.call_count)
@@ -289,7 +302,7 @@ class TestStorPoolOpenStack(unittest.TestCase):
             ['storpool-openstack-integration']
         )
         testee.install_package()
-        self.assertEquals(count_npset + 9, spstatus.npset.call_count)
+        self.assertEquals(count_npset + 10, spstatus.npset.call_count)
         self.assertEquals(count_install + 3,
                           sprepo.install_packages.call_count)
         self.assertEquals(count_record + 1, sprepo.record_packages.call_count)
@@ -312,9 +325,21 @@ class TestStorPoolOpenStack(unittest.TestCase):
         count_npset = spstatus.npset.call_count
         count_construct = txn.LXD.construct_all.call_count
 
+        # We were not even told to do nothing, we were just told...
+        # nothing...
+        with self.assertRaises(KeyError):
+            testee.enable_and_start()
+
+        # OK, now we were indeed told not to do anything...
+        r_config.r_set('storpool_openstack_install', False, False)
+        testee.enable_and_start()
+        self.assertEquals(count_npset, spstatus.npset.call_count)
+        self.assertEquals(count_construct, txn.LXD.construct_all.call_count)
+
         # There are no containers!
         # (so, yeah, strictiy this cannot happen, there would always be
         #  the bare metal environment, but oh well)
+        r_config.r_set('storpool_openstack_install', True, False)
         spconfig.get_our_id.return_value = '1'
         txn.LXD.construct_all.return_value = []
         isfile.return_value = False

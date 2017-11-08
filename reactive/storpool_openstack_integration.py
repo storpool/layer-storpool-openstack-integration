@@ -84,11 +84,23 @@ def install_package():
     spstatus.npset('maintenance', 'obtaining the requested StorPool version')
     spver = hookenv.config().get('storpool_version', None)
     sposiver = hookenv.config().get('storpool_openstack_version', None)
+    spinstall = hookenv.config().get('storpool_openstack_install', None)
     if spver is None or spver == '':
         rdebug('no storpool_version key in the charm config yet')
         return
     if sposiver is None or sposiver == '':
         rdebug('no storpool_openstack_version key in the charm config yet')
+        return
+    if sposiver is None or sposiver == '':
+        rdebug('no storpool_openstack_version key in the charm config yet')
+        return
+    if spinstall is None:
+        rdebug('no storpool_openstack_install key in the charm config yet')
+        return
+
+    if not spinstall:
+        rdebug('skipping the installation of the OpenStack integration')
+        reactive.set_state('storpool-osi.package-installed')
         return
 
     spstatus.npset('maintenance', 'installing the StorPool OpenStack packages')
@@ -122,6 +134,11 @@ def enable_and_start():
     Run the StorPool OpenStack integration on the current node and,
     if configured, its LXD containers.
     """
+    if not hookenv.config()['storpool_openstack_install']:
+        rdebug('skipping the installation into containers')
+        reactive.set_state('storpool-osi.installed-into-lxds')
+        return
+
     spstatus.npset('maintenance', 'installing the OpenStack integration into '
                    'the running containers')
     rdebug('installing into the running containers')

@@ -3,3 +3,7 @@ options:
     type: string
     description: The version of the StorPool OpenStack integration Ubuntu packages to install.
     default:
+  storpool_openstack_install:
+    type: boolean
+    description: Is this charm responsible for installing the StorPool OpenStack integration?
+    default: true
