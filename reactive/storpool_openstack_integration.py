@@ -160,7 +160,6 @@ def enable_and_start():
 
         rdebug('  - trying to detect OpenStack components in "{name}"'
                .format(name=lxd.name))
-        global openstack_components
         for comp in openstack_components:
             res = lxd.exec_with_output(['sp-openstack', '--', 'detect', comp])
             if res['res'] != 0:
