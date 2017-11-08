@@ -323,7 +323,6 @@ class TestStorPoolOpenStack(unittest.TestCase):
         setting files up in them.
         """
         count_npset = spstatus.npset.call_count
-        count_construct = txn.LXD.construct_all.call_count
 
         # We were not even told to do nothing, we were just told...
         # nothing...
@@ -334,21 +333,15 @@ class TestStorPoolOpenStack(unittest.TestCase):
         r_config.r_set('storpool_openstack_install', False, False)
         testee.enable_and_start()
         self.assertEquals(count_npset, spstatus.npset.call_count)
-        self.assertEquals(count_construct, txn.LXD.construct_all.call_count)
 
         # There are no containers!
         # (so, yeah, strictiy this cannot happen, there would always be
         #  the bare metal environment, but oh well)
         r_config.r_set('storpool_openstack_install', True, False)
         spconfig.get_our_id.return_value = '1'
-        txn.LXD.construct_all.return_value = []
         isfile.return_value = False
         isdir.return_value = True
         exists.return_value = False
-        testee.enable_and_start()
-        self.assertEquals(count_npset + 2, spstatus.npset.call_count)
-        self.assertEquals(count_construct + 1,
-                          txn.LXD.construct_all.call_count)
 
         EXPECTED_PACKAGES = [
             'storpool-openstack-integration',
@@ -413,28 +406,21 @@ class TestStorPoolOpenStack(unittest.TestCase):
 
         just_call.side_effect = subprocess_call_validate
 
+        lxd = MockLXD(tester=self, name='', comp=['nova', 'os_brick'])
+
+        def mock_create_lxd(name):
+            self.assertEquals('', name)
+            return lxd
+
         # Right, so let's have these...
         txn.module_name.return_value = 'charm-storpool-block'
-        lxds = [
-            MockLXD(tester=self, name='', comp=['nova', 'os_brick']),
-            MockLXD(tester=self, name='juju-cinder',
-                    comp=['cinder', 'os_brick']),
-            MockLXD(tester=self, name='juju-something-else', comp=[]),
-        ]
-        txn.LXD.construct_all.return_value = lxds
+        txn.LXD.side_effect = mock_create_lxd
         testee.enable_and_start()
 
         # Did we detect, check, and install all the necessary components for
-        # all the LXDs (including the "root" bare metal one)?
-        for lxd in lxds:
-            for tp in ('detected', 'checked', 'installed'):
-                lst = lxd.__getattribute__('comp_' + tp)
-                self.assertEquals(lst, lxd.comp)
+        # the root LXD?
+        for tp in ('detected', 'checked', 'installed'):
+            lst = lxd.__getattribute__('comp_' + tp)
+            self.assertEquals(lst, lxd.comp)
 
-            if lxd.name == '':
-                self.assertEquals(set(), lxd.pkg_copied)
-            elif lxd.comp:
-                self.assertEquals(set(EXPECTED_PACKAGES), lxd.pkg_copied)
-            else:
-                self.assertEquals(set(['storpool-openstack-integration']),
-                                  lxd.pkg_copied)
+        self.assertEquals(set(), lxd.pkg_copied)
