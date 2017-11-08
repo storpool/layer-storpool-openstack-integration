@@ -347,9 +347,8 @@ class TestStorPoolOpenStack(unittest.TestCase):
     def test_enable_and_start(self, check_output, just_call,
                               isfile, isdir, exists):
         """
-        Test that at least some steps are taken towards examining LXD
-        containers (including the "root" one on the bare metal) and
-        setting files up in them.
+        Test that at least some steps are taken towards examining
+        the environment and setting up some files.
         """
         count_npset = spstatus.npset.call_count
 
