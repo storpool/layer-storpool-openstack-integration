@@ -4,30 +4,17 @@ the current node and, if configured, its LXD containers.
 """
 from __future__ import print_function
 
-import os
-import platform
-import tempfile
 import subprocess
 
 from charms import reactive
 from charms.reactive import helpers as rhelpers
-from charmhelpers.core import hookenv, host, unitdata
+from charmhelpers.core import hookenv
 
 from spcharms import config as spconfig
-from spcharms import kvdata
 from spcharms import repo as sprepo
 from spcharms import status as spstatus
 from spcharms import txn
 from spcharms import utils as sputils
-
-
-def block_conffile():
-    """
-    Return the name of the configuration file that will be generated for
-    the `storpool_block` service in order to also export the block devices
-    into the host's LXD containers.
-    """
-    return '/etc/storpool.conf.d/storpool-cinder-block.conf'
 
 
 def rdebug(s):
@@ -191,114 +178,6 @@ def enable_and_start():
 
     reactive.set_state('storpool-osi.installed')
     spstatus.npset('maintenance', '')
-
-
-def create_block_conffile():
-    """
-    Instruct storpool_block to create devices in a container's filesystem.
-    """
-    confname = block_conffile()
-    lxd_cinder = None
-    if lxd_cinder is not None:
-        rdebug('found a Cinder container at "{name}"'
-               .format(name=lxd_cinder.name))
-        try:
-            rdebug('about to record the name of the Cinder LXD - "{name}" - '
-                   'into {confname}'
-                   .format(name=lxd_cinder.name, confname=confname))
-            dirname = os.path.dirname(confname)
-            rdebug('- checking for the {dirname} directory'
-                   .format(dirname=dirname))
-            if not os.path.isdir(dirname):
-                rdebug('  - nah, creating it')
-                os.mkdir(dirname, mode=0o755)
-
-            rdebug('- is the file there?')
-            okay = False
-            expected_contents = [
-                '[{node}]'.format(node=platform.node()),
-                'SP_EXTRA_FS=lxd:{name}'.format(name=lxd_cinder.name)
-            ]
-            if os.path.isfile(confname):
-                rdebug('  - yes, it is... but does it contain the right data?')
-                with open(confname, mode='r') as conffile:
-                    contents = list(map(lambda s: s.rstrip(),
-                                        conffile.readlines()))
-                    if contents == expected_contents:
-                        rdebug('   - whee, it already does!')
-                        okay = True
-                    else:
-                        rdebug('   - it does NOT: {lst}'.format(lst=contents))
-            else:
-                rdebug('   - nah...')
-                if os.path.exists(confname):
-                    rdebug('     - but it still exists?!')
-                    subprocess.call(['rm', '-rf', '--', confname])
-                    if os.path.exists(confname):
-                        rdebug('     - could not remove it, so leaving it '
-                               'alone, I guess')
-                        okay = True
-
-            if not okay:
-                rdebug('- about to recreate the {confname} file'
-                       .format(confname=confname))
-                with tempfile.NamedTemporaryFile(dir='/tmp',
-                                                 mode='w+t') as spconf:
-                    print('\n'.join(expected_contents), file=spconf)
-                    spconf.flush()
-                    txn.install('-o', 'root', '-g', 'root', '-m', '644', '--',
-                                spconf.name, confname)
-                rdebug('- looks like we are done with it')
-                rdebug('- let us try to restart the storpool_block service '
-                       '(it may not even have been started yet, so '
-                       'ignore errors)')
-                try:
-                    if host.service_running('storpool_block'):
-                        rdebug('  - well, it does seem to be running, '
-                               'so restarting it')
-                        host.service_restart('storpool_block')
-                    else:
-                        rdebug('  - nah, it was not running at all indeed')
-                except Exception as e:
-                    rdebug('  - could not restart the service, but '
-                           'ignoring the error: {e}'.format(e=e))
-            unitdata.kv().set(kvdata.KEY_LXD_NAME, lxd_cinder.name)
-        except Exception as e:
-            rdebug('could not check for and/or recreate the {confname} '
-                   'storpool_block config file adapted the "{name}" '
-                   'LXD container: {e}'
-                   .format(confname=confname, name=lxd_cinder.name, e=e))
-    else:
-        rdebug('no Cinder LXD containers found, checking for '
-               'any previously stored configuration...')
-        removed = False
-        if os.path.isfile(confname):
-            rdebug('- yes, {confname} exists, removing it'
-                   .format(confname=confname))
-            try:
-                os.unlink(confname)
-                removed = True
-            except Exception as e:
-                rdebug('could not remove {confname}: {e}'
-                       .format(confname=confname, e=e))
-        elif os.path.exists(confname):
-            rdebug('- well, {confname} exists, but it is not a file; '
-                   'removing it anyway'.format(confname=confname))
-            subprocess.call(['rm', '-rf', '--', confname])
-            removed = True
-        if removed:
-            rdebug('- let us try to restart the storpool_block service ' +
-                   '(it may not even have been started yet, so ignore errors)')
-            try:
-                if host.service_running('storpool_block'):
-                    rdebug('  - well, it does seem to be running, so ' +
-                           'restarting it')
-                    host.service_restart('storpool_block')
-                else:
-                    rdebug('  - nah, it was not running at all indeed')
-            except Exception as e:
-                rdebug('  - could not restart the service, but '
-                       'ignoring the error: {e}'.format(e=e))
 
 
 @reactive.when('storpool-osi.installed')
