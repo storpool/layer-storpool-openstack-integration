@@ -127,7 +127,7 @@ def install_package():
 
 
 @reactive.when('storpool-osi.package-installed')
-@reactive.when_not('storpool-osi.installed-into-lxds')
+@reactive.when_not('storpool-osi.installed')
 @reactive.when_not('storpool-osi.stopped')
 def enable_and_start():
     """
@@ -136,56 +136,47 @@ def enable_and_start():
     """
     if not hookenv.config()['storpool_openstack_install']:
         rdebug('skipping the installation into containers')
-        reactive.set_state('storpool-osi.installed-into-lxds')
+        reactive.set_state('storpool-osi.installed')
         return
 
     spstatus.npset('maintenance', 'installing the OpenStack integration into '
                    'the running containers')
-    rdebug('installing into the running containers')
+    rdebug('installing the StorPool OpenStack integration')
 
     sp_ourid = spconfig.get_our_id()
     rdebug('- got SP_OURID {ourid}'.format(ourid=sp_ourid))
 
     nova_found = False
-    for lxd in [txn.LXD(name='')]:
-        rdebug('- trying for "{name}"'.format(name=lxd.name))
+    rdebug('- trying to detect OpenStack components')
+    for comp in openstack_components:
+        res = sputils.exec(['sp-openstack', '--', 'detect', comp])
+        if res['res'] != 0:
+            rdebug('    - {comp} not found'.format(comp=comp))
+            continue
+        rdebug('    - {comp} FOUND!'.format(comp=comp))
 
-        rdebug('  - trying to detect OpenStack components in "{name}"'
-               .format(name=lxd.name))
-        for comp in openstack_components:
-            res = lxd.exec_with_output(['sp-openstack', '--', 'detect', comp])
+        if comp == 'nova':
+            nova_found = True
+            rdebug('     - found Nova on bare metal, will try to restart it')
+
+        res = sputils.exec(['sp-openstack', '--', 'check', comp])
+        if res['res'] == 0:
+            rdebug('    - {comp} integration already there'
+                   .format(comp=comp))
+        else:
+            rdebug('    - {comp} MISSING integration'.format(comp=comp))
+            rdebug('    - running sp-openstack install {comp}'
+                   .format(comp=comp))
+            res = sputils.exec(['sp-openstack', '-T',
+                                txn.module_name(), '--', 'install',
+                                comp])
             if res['res'] != 0:
-                rdebug('    - {comp} not found'.format(comp=comp))
-                continue
-            rdebug('    - {comp} FOUND!'.format(comp=comp))
+                raise Exception('Could not install the StorPool OpenStack '
+                                'integration for {comp}'.format(comp=comp))
 
-            if comp == 'nova':
-                nova_found = True
-                rdebug('     - found Nova on bare metal, will try to '
-                       'restart it')
+        rdebug('    - done with {comp}'.format(comp=comp))
 
-            res = lxd.exec_with_output(['sp-openstack', '--', 'check', comp])
-            if res['res'] == 0:
-                rdebug('    - {comp} integration already there'
-                       .format(comp=comp))
-            else:
-                rdebug('    - {comp} MISSING integration'.format(comp=comp))
-                rdebug('    - running sp-openstack install {comp}'
-                       .format(comp=comp))
-                res = lxd.exec_with_output(['sp-openstack', '-T',
-                                            txn.module_name(), '--', 'install',
-                                            comp])
-                if res['res'] != 0:
-                    raise Exception('Could not install the StorPool OpenStack '
-                                    'integration for {comp} in the "{name}" '
-                                    'container'
-                                    .format(comp=comp, name=lxd.name))
-
-            rdebug('    - done with {comp}'.format(comp=comp))
-
-        rdebug('  - done with "{name}"'.format(name=lxd.name))
-
-    rdebug('done with the running containers')
+    rdebug('done with the OpenStack components')
 
     if nova_found:
         rdebug('Found Nova on bare metal, trying to restart nova-compute')
@@ -197,7 +188,7 @@ def enable_and_start():
             rdebug('"service nova-compute restart" returned '
                    'a non-zero exit code {res}, ignoring it'.format(res=res))
 
-    reactive.set_state('storpool-osi.installed-into-lxds')
+    reactive.set_state('storpool-osi.installed')
     spstatus.npset('maintenance', '')
 
 
@@ -310,14 +301,14 @@ def create_block_conffile():
                        'ignoring the error: {e}'.format(e=e))
 
 
-@reactive.when('storpool-osi.installed-into-lxds')
+@reactive.when('storpool-osi.installed')
 @reactive.when_not('storpool-osi.package-installed')
 @reactive.when_not('storpool-osi.stopped')
 def restart():
     """
     Rerun the installation of the OpenStack integration.
     """
-    reactive.remove_state('storpool-osi.installed-into-lxds')
+    reactive.remove_state('storpool-osi.installed')
 
 
 @reactive.when('storpool-osi.package-installed')
@@ -337,7 +328,7 @@ def reset_states():
     rdebug('state reset requested')
     spstatus.reset_unless_error()
     reactive.remove_state('storpool-osi.package-installed')
-    reactive.remove_state('storpool-osi.installed-into-lxds')
+    reactive.remove_state('storpool-osi.installed')
 
 
 @reactive.hook('upgrade-charm')

@@ -115,6 +115,34 @@ def mock_reactive_states(f):
     return inner1
 
 
+comp = {}
+comp_tester = None
+
+
+def exec_with_output(cmd):
+    if cmd[0:3] == ['sp-openstack', '--', 'detect']:
+        comp_tester.assertEqual(4, len(cmd))
+        if cmd[3] in comp['all']:
+            comp['detected'].add(cmd[3])
+            return {'res': 0}
+        else:
+            return {'res': 1}
+    elif cmd[0:3] == ['sp-openstack', '--', 'check']:
+        # Always try to install
+        comp_tester.assertIn(cmd[3], comp['all'])
+        comp['checked'].add(cmd[3])
+        return {'res': 1}
+    elif cmd[0:5] == ['sp-openstack', '-T', 'charm-storpool-block',
+                      '--', 'install']:
+        comp_tester.assertIn(cmd[5], comp['all'])
+        comp['installed'].add(cmd[5])
+        return {'res': 0}
+    else:
+        comp_tester.fail('Unexpected command {cmd} '
+                         'passed to exec_with_output()'
+                         .format(cmd=cmd))
+
+
 from reactive import storpool_openstack_integration as testee
 
 CONFIG_STATE = 'storpool-osi.config-available'
@@ -315,6 +343,7 @@ class TestStorPoolOpenStack(unittest.TestCase):
     @mock.patch('os.path.isfile')
     @mock.patch('subprocess.call')
     @mock.patch('subprocess.check_output')
+    @mock.patch('spcharms.utils.exec', new=exec_with_output)
     def test_enable_and_start(self, check_output, just_call,
                               isfile, isdir, exists):
         """
@@ -343,59 +372,15 @@ class TestStorPoolOpenStack(unittest.TestCase):
         isdir.return_value = True
         exists.return_value = False
 
-        EXPECTED_PACKAGES = [
-            'storpool-openstack-integration',
-            'txn-install',
-            'python-storpool-spopenstack',
-        ]
-
-        class MockLXD(object):
-            def __init__(self, tester, name, comp):
-                self.tester = tester
-                self.name = name
-                self.comp = set(comp)
-                self.comp_detected = set()
-                self.comp_checked = set()
-                self.comp_installed = set()
-                self.pkg_copied = set()
-                self.txn = mock.Mock()
-
-                if name == '':
-                    self.prefix = ''
-                else:
-                    self.prefix = '/nonexistent/var/lib/lxd/containers/' + \
-                                  name + '/rootfs'
-
-            def exec_with_output(self, cmd):
-                if cmd[0:3] == ['sp-openstack', '--', 'detect']:
-                    self.tester.assertEqual(4, len(cmd))
-                    if cmd[3] in self.comp:
-                        self.comp_detected.add(cmd[3])
-                        return {'res': 0}
-                    else:
-                        return {'res': 1}
-                elif cmd[0:3] == ['sp-openstack', '--', 'check']:
-                    # Always try to install
-                    self.tester.assertIn(cmd[3], self.comp)
-                    self.comp_checked.add(cmd[3])
-                    return {'res': 1}
-                elif cmd[0:5] == ['sp-openstack', '-T', 'charm-storpool-block',
-                                  '--', 'install']:
-                    self.tester.assertIn(cmd[5], self.comp)
-                    self.comp_installed.add(cmd[5])
-                    return {'res': 0}
-                else:
-                    self.tester.fail('Unexpected command {cmd} '
-                                     'passed to exec_with_output()'
-                                     .format(cmd=cmd))
-
-            def copy_package_trees(self, *names):
-                unexpected = set(names).difference(set(EXPECTED_PACKAGES))
-                if unexpected:
-                    self.tester.fail('Unexpected packages passed to '
-                                     'copy_package_trees(): {p}'
-                                     .format(p=', '.join(sorted(unexpected))))
-                self.pkg_copied = self.pkg_copied.union(set(names))
+        global comp
+        comp = {
+            'all': set(['nova', 'os_brick']),
+            'detected': set(),
+            'checked': set(),
+            'installed': set(),
+        }
+        global comp_tester
+        comp_tester = self
 
         def subprocess_call_validate(cmd, **kwargs):
             if cmd not in (
@@ -406,21 +391,10 @@ class TestStorPoolOpenStack(unittest.TestCase):
 
         just_call.side_effect = subprocess_call_validate
 
-        lxd = MockLXD(tester=self, name='', comp=['nova', 'os_brick'])
-
-        def mock_create_lxd(name):
-            self.assertEquals('', name)
-            return lxd
-
         # Right, so let's have these...
         txn.module_name.return_value = 'charm-storpool-block'
-        txn.LXD.side_effect = mock_create_lxd
         testee.enable_and_start()
 
-        # Did we detect, check, and install all the necessary components for
-        # the root LXD?
+        # Did we detect, check, and install all the necessary components?
         for tp in ('detected', 'checked', 'installed'):
-            lst = lxd.__getattribute__('comp_' + tp)
-            self.assertEquals(lst, lxd.comp)
-
-        self.assertEquals(set(), lxd.pkg_copied)
+            self.assertEquals(comp['all'], comp[tp])
