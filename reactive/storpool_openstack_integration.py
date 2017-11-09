@@ -12,9 +12,19 @@ from charmhelpers.core import hookenv
 
 from spcharms import config as spconfig
 from spcharms import repo as sprepo
+from spcharms import states as spstates
 from spcharms import status as spstatus
 from spcharms import txn
 from spcharms import utils as sputils
+
+STATES_REDO = {
+    'set': ['storpool-osi.configure'],
+    'unset': [
+        'storpool-osi.config-available',
+        'storpool-osi.package-installed',
+        'storpool-osi.installed',
+    ],
+}
 
 
 def rdebug(s):
@@ -24,12 +34,26 @@ def rdebug(s):
     sputils.rdebug(s, prefix='openstack-integration')
 
 
-@reactive.hook('config-changed')
+@reactive.hook('install')
+def register():
+    """
+    Register our hook state mappings.
+    """
+    spstates.register('storpool-openstack-integration', {
+        'config-changed': STATES_REDO,
+        'upgrade-charm': STATES_REDO,
+    })
+
+
+@reactive.when('storpool-osi.configure')
+@reactive.when_not('storpool-osi.configured')
+@reactive.when_not('storpool-osi.stopped')
 def config_changed():
     """
     Check if all the configuration settings have been supplied and/or changed.
     """
     rdebug('config-changed happened')
+    reactive.remove_state('storpool-osi.configure')
     config = hookenv.config()
 
     spver = config.get('storpool_version', None)
@@ -39,17 +63,16 @@ def config_changed():
     rdebug('and we do{xnot} have a storpool_openstack_version setting'
            .format(xnot=' not' if sposiver is None else ''))
     if spver is None or spver == '' or sposiver is None or sposiver == '':
-        rdebug('removing the config-available state')
-        reactive.remove_state('storpool-osi.config-available')
-        reactive.remove_state('storpool-osi.package-installed')
+        rdebug('removing any progress states')
+        for state in STATES_REDO['unset']:
+            reactive.remove_state(state)
         return
 
     rdebug('setting the config-available state')
     reactive.set_state('storpool-osi.config-available')
 
-    if (config.changed('storpool_version') or
-        config.changed('storpool_openstack_version')) and \
-       rhelpers.is_state('storpool-osi.package-installed'):
+    if config.changed('storpool_version') or \
+       config.changed('storpool_openstack_version'):
         rdebug('the StorPool component versions have changed, removing '
                'the package-installed state')
         reactive.remove_state('storpool-osi.package-installed')
@@ -200,25 +223,6 @@ def reinstall():
     reactive.remove_state('storpool-osi.package-installed')
 
 
-def reset_states():
-    """
-    Rerun everything.
-    """
-    rdebug('state reset requested')
-    spstatus.reset_unless_error()
-    reactive.remove_state('storpool-osi.package-installed')
-    reactive.remove_state('storpool-osi.installed')
-
-
-@reactive.hook('upgrade-charm')
-def remove_states_on_upgrade():
-    """
-    Rerun everything on charm upgrade.
-    """
-    rdebug('storpool-osi.upgrade-charm invoked')
-    reset_states()
-
-
 @reactive.when('storpool-osi.stop')
 @reactive.when_not('storpool-osi.stopped')
 def remove_leftovers():
@@ -240,5 +244,6 @@ def remove_leftovers():
     else:
         rdebug('apparently someone else will/has let storpool-common know')
 
-    reset_states()
     reactive.set_state('storpool-osi.stopped')
+    for state in STATES_REDO['set'] + STATES_REDO['unset']:
+        reactive.remove_state(state)
