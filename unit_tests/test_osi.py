@@ -100,6 +100,7 @@ r_config = MockConfig()
 
 # Do not give hookenv.config() a chance to run at all
 hookenv.config = lambda: r_config
+spconfig.m = lambda: r_config
 
 
 def mock_reactive_states(f):

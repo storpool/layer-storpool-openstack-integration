@@ -45,6 +45,7 @@ def register():
     })
 
 
+@reactive.when('storpool-helper.config-set')
 @reactive.when('storpool-osi.configure')
 @reactive.when_not('storpool-osi.configured')
 @reactive.when_not('storpool-osi.stopped')
@@ -54,7 +55,7 @@ def config_changed():
     """
     rdebug('config-changed happened')
     reactive.remove_state('storpool-osi.configure')
-    config = hookenv.config()
+    config = spconfig.m()
 
     spver = config.get('storpool_version', None)
     rdebug('and we do{xnot} have a storpool_version setting'
@@ -81,6 +82,7 @@ def config_changed():
 openstack_components = ['cinder', 'os_brick', 'nova']
 
 
+@reactive.when('storpool-helper.config-set')
 @reactive.when('storpool-repo-add.available', 'storpool-common.config-written')
 @reactive.when('storpool-osi.config-available')
 @reactive.when_not('storpool-osi.package-installed')
@@ -92,10 +94,11 @@ def install_package():
     rdebug('the OpenStack integration repo has become available and '
            'the common packages have been configured')
 
+    config = spconfig.m()
     spstatus.npset('maintenance', 'obtaining the requested StorPool version')
-    spver = hookenv.config().get('storpool_version', None)
-    sposiver = hookenv.config().get('storpool_openstack_version', None)
-    spinstall = hookenv.config().get('storpool_openstack_install', None)
+    spver = config.get('storpool_version', None)
+    sposiver = config.get('storpool_openstack_version', None)
+    spinstall = config.get('storpool_openstack_install', None)
     if spver is None or spver == '':
         rdebug('no storpool_version key in the charm config yet')
         return
