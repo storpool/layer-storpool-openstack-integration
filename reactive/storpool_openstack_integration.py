@@ -98,7 +98,9 @@ def install_package():
     spstatus.npset('maintenance', 'obtaining the requested StorPool version')
     spver = config.get('storpool_version', None)
     sposiver = config.get('storpool_openstack_version', None)
-    spinstall = config.get('storpool_openstack_install', None)
+    # Specifically get this one from the charm's config, not from
+    # whatever another charm happened to pass down.
+    spinstall = hookenv.config().get('storpool_openstack_install', None)
     if spver is None or spver == '':
         rdebug('no storpool_version key in the charm config yet')
         return
