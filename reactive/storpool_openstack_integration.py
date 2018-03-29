@@ -121,8 +121,8 @@ def install_package():
 
     spstatus.npset('maintenance', 'installing the StorPool OpenStack packages')
     (err, newly_installed) = sprepo.install_packages({
-        'storpool-block': spver,
-        'python-storpool-spopenstack': spver,
+        'storpool-block': '*',
+        'python-storpool-spopenstack': '*',
         'storpool-openstack-integration': sposiver,
     })
     if err is not None:
