@@ -1,4 +1,12 @@
 options:
+  handle_lxc:
+    type: boolean
+    description: Specify whether LXC containers should be searched for applications.
+    default: false
+  storpool_charm_log_file:
+    type: string
+    description: The full path to a file for logging additional diagnostics.
+    default: /dev/null
   storpool_openstack_version:
     type: string
     description: The version of the StorPool OpenStack integration Ubuntu packages to install.
