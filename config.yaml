@@ -7,6 +7,10 @@ options:
     type: string
     description: The full path to a file for logging additional diagnostics.
     default: /dev/null
+  storpool_conf:
+    type: string
+    description: The contents of the /etc/storpool.conf file.
+    default:
   storpool_openstack_version:
     type: string
     description: The version of the StorPool OpenStack integration Ubuntu packages to install.
@@ -18,4 +22,8 @@ options:
   storpool_repo_url:
     type: string
     description: The location of the StorPool APT repository.
+    default:
+  storpool_version:
+    type: string
+    description: The version of the StorPool Ubuntu packages to install.
     default:
