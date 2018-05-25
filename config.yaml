@@ -15,3 +15,7 @@ options:
     type: boolean
     description: Is this charm responsible for installing the StorPool OpenStack integration?
     default: true
+  storpool_repo_url:
+    type: string
+    description: The location of the StorPool APT repository.
+    default:
