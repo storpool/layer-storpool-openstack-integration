@@ -1,4 +1,8 @@
 options:
+  bypassed_checks:
+    type: string
+    description: Consciously bypass some of the configuration checks.
+    default: none
   handle_lxc:
     type: boolean
     description: Specify whether LXC containers should be searched for applications.

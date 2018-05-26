@@ -10,20 +10,10 @@ import unittest
 
 import mock
 
-from charmhelpers.core import hookenv
-
-root_path = os.path.realpath('.')
+root_path = os.path.realpath('lib')
 if root_path not in sys.path:
     sys.path.insert(0, root_path)
 
-lib_path = os.path.realpath('unit_tests/lib')
-if lib_path not in sys.path:
-    sys.path.insert(0, lib_path)
-
-from spcharms import config as spconfig
-from spcharms import repo as sprepo
-from spcharms import status as spstatus
-from spcharms import txn
 from spcharms import utils as sputils
 
 
@@ -99,8 +89,7 @@ r_state = MockReactive()
 r_config = MockConfig()
 
 # Do not give hookenv.config() a chance to run at all
-hookenv.config = lambda: r_config
-spconfig.m = lambda: r_config
+# hookenv.config = lambda: r_config
 
 
 def mock_reactive_states(f):
@@ -108,6 +97,7 @@ def mock_reactive_states(f):
         @mock.patch('charms.reactive.set_state', new=r_state.set_state)
         @mock.patch('charms.reactive.remove_state', new=r_state.remove_state)
         @mock.patch('charms.reactive.helpers.is_state', new=r_state.is_state)
+        @mock.patch('spcharms.config.m', new=lambda: r_config)
         def inner2(*args, **kwargs):
             return f(inst, *args, **kwargs)
 
@@ -161,12 +151,21 @@ class TestStorPoolOpenStack(unittest.TestCase):
         super(TestStorPoolOpenStack, self).setUp()
         r_state.r_clear_states()
         r_config.r_clear_config()
-        sputils.err.side_effect = lambda *args: self.fail_on_err(*args)
+        self.save_sputils_err = sputils.err
+        sputils.err = lambda *args: self.fail_on_err(*args)
+
+    def tearDown(self):
+        """
+        Restore the sputils.err function.
+        """
+        super(TestStorPoolOpenStack, self).tearDown()
+        sputils.err = self.save_sputils_err
 
     def fail_on_err(self, msg):
         self.fail('sputils.err() invoked: {msg}'.format(msg=msg))
 
     @mock_reactive_states
+    @mock.patch('charmhelpers.core.hookenv.config', new=lambda: {})
     def test_config_changed(self):
         """
         Test that the reactive states are properly (re)set when
@@ -276,19 +275,23 @@ class TestStorPoolOpenStack(unittest.TestCase):
         self.assertEquals(set([CONFIG_STATE]), r_state.r_get_states())
 
     @mock_reactive_states
-    def test_install_package(self):
+    @mock.patch('charmhelpers.core.hookenv.config', new=lambda: r_config)
+    @mock.patch('spcharms.status.npset')
+    @mock.patch('spcharms.repo.record_packages')
+    @mock.patch('spcharms.repo.install_packages')
+    def test_install_package(self, install_packages, record_packages, npset):
         """
         Test that the layer attempts to install packages correctly.
         """
-        count_npset = spstatus.npset.call_count
-        count_install = sprepo.install_packages.call_count
-        count_record = sprepo.record_packages.call_count
+        count_npset = npset.call_count
+        count_install = install_packages.call_count
+        count_record = record_packages.call_count
 
         # Check that it doesn't do anything without a StorPool version
         testee.install_package()
-        self.assertEquals(count_npset + 1, spstatus.npset.call_count)
-        self.assertEquals(count_install, sprepo.install_packages.call_count)
-        self.assertEquals(count_record, sprepo.record_packages.call_count)
+        self.assertEquals(count_npset + 1, npset.call_count)
+        self.assertEquals(count_install, install_packages.call_count)
+        self.assertEquals(count_record, record_packages.call_count)
         self.assertEquals(set(), r_state.r_get_states())
 
         # Now give it something to install, but tell it not to.
@@ -296,9 +299,9 @@ class TestStorPoolOpenStack(unittest.TestCase):
         r_config.r_set('storpool_openstack_version', '3.2.1', False)
         r_config.r_set('storpool_openstack_install', False, False)
         testee.install_package()
-        self.assertEquals(count_npset + 2, spstatus.npset.call_count)
-        self.assertEquals(count_install, sprepo.install_packages.call_count)
-        self.assertEquals(count_record, sprepo.record_packages.call_count)
+        self.assertEquals(count_npset + 2, npset.call_count)
+        self.assertEquals(count_install, install_packages.call_count)
+        self.assertEquals(count_record, record_packages.call_count)
         self.assertEquals(set([INSTALLED_STATE]), r_state.r_get_states())
 
         # Okay, now let's give it something to install... and fail.
@@ -307,38 +310,40 @@ class TestStorPoolOpenStack(unittest.TestCase):
         r_config.r_set('storpool_version', '0.1.0', False)
         r_config.r_set('storpool_openstack_version', '3.2.1', False)
         r_config.r_set('storpool_openstack_install', True, False)
-        sprepo.install_packages.return_value = ('oops', [])
+        install_packages.return_value = ('oops', [])
         testee.install_package()
-        self.assertEquals(count_npset + 4, spstatus.npset.call_count)
-        self.assertEquals(count_install + 1,
-                          sprepo.install_packages.call_count)
-        self.assertEquals(count_record, sprepo.record_packages.call_count)
+        self.assertEquals(count_npset + 4, npset.call_count)
+        self.assertEquals(count_install + 1, install_packages.call_count)
+        self.assertEquals(count_record, record_packages.call_count)
         self.assertEquals(set(), r_state.r_get_states())
 
         # Right, now let's pretend that there was nothing to install
-        sprepo.install_packages.return_value = (None, [])
+        install_packages.return_value = (None, [])
         testee.install_package()
-        self.assertEquals(count_npset + 7, spstatus.npset.call_count)
-        self.assertEquals(count_install + 2,
-                          sprepo.install_packages.call_count)
-        self.assertEquals(count_record, sprepo.record_packages.call_count)
+        self.assertEquals(count_npset + 7, npset.call_count)
+        self.assertEquals(count_install + 2, install_packages.call_count)
+        self.assertEquals(count_record, record_packages.call_count)
         self.assertEquals(set([INSTALLED_STATE]), r_state.r_get_states())
 
         # And now for the most common case, something to install...
         r_state.r_set_states(set())
-        sprepo.install_packages.return_value = (
+        install_packages.return_value = (
             None,
             ['storpool-openstack-integration']
         )
         testee.install_package()
-        self.assertEquals(count_npset + 10, spstatus.npset.call_count)
+        self.assertEquals(count_npset + 10, npset.call_count)
         self.assertEquals(count_install + 3,
-                          sprepo.install_packages.call_count)
-        self.assertEquals(count_record + 1, sprepo.record_packages.call_count)
+                          install_packages.call_count)
+        self.assertEquals(count_record + 1, record_packages.call_count)
         self.assertEquals(set([INSTALLED_STATE]), r_state.r_get_states())
 
     # Now this one is a doozy...
     @mock_reactive_states
+    @mock.patch('charmhelpers.core.hookenv.config', new=lambda: r_config)
+    @mock.patch('spcharms.txn.module_name')
+    @mock.patch('spcharms.config.get_our_id')
+    @mock.patch('spcharms.status.npset')
     @mock.patch('os.path.exists')
     @mock.patch('os.path.isdir')
     @mock.patch('os.path.isfile')
@@ -346,12 +351,13 @@ class TestStorPoolOpenStack(unittest.TestCase):
     @mock.patch('subprocess.check_output')
     @mock.patch('spcharms.utils.exec', new=exec_with_output)
     def test_enable_and_start(self, check_output, just_call,
-                              isfile, isdir, exists):
+                              isfile, isdir, exists, npset, get_our_id,
+                              txn_module_name):
         """
         Test that at least some steps are taken towards examining
         the environment and setting up some files.
         """
-        count_npset = spstatus.npset.call_count
+        count_npset = npset.call_count
 
         # We were not even told to do nothing, we were just told...
         # nothing...
@@ -361,13 +367,13 @@ class TestStorPoolOpenStack(unittest.TestCase):
         # OK, now we were indeed told not to do anything...
         r_config.r_set('storpool_openstack_install', False, False)
         testee.enable_and_start()
-        self.assertEquals(count_npset, spstatus.npset.call_count)
+        self.assertEquals(count_npset, npset.call_count)
 
         # There are no containers!
         # (so, yeah, strictiy this cannot happen, there would always be
         #  the bare metal environment, but oh well)
         r_config.r_set('storpool_openstack_install', True, False)
-        spconfig.get_our_id.return_value = '1'
+        get_our_id.return_value = '1'
         isfile.return_value = False
         isdir.return_value = True
         exists.return_value = False
@@ -385,14 +391,14 @@ class TestStorPoolOpenStack(unittest.TestCase):
         def subprocess_call_validate(cmd, **kwargs):
             if cmd not in (
                 ['service', 'nova-compute', 'restart'],
-            ):
+            ) and cmd[0] != 'juju-log':
                 self.fail('subprocess.call() invoked for '
                           'unexpected command {cmd}'.format(cmd=cmd))
 
         just_call.side_effect = subprocess_call_validate
 
         # Right, so let's have these...
-        txn.module_name.return_value = 'charm-storpool-block'
+        txn_module_name.return_value = 'charm-storpool-block'
         testee.enable_and_start()
 
         # Did we detect, check, and install all the necessary components?
