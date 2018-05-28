@@ -136,8 +136,8 @@ def remove_leftovers():
         rdebug('uninstalling any beacon-related packages')
         sprepo.unrecord_packages('storpool-beacon')
 
-    rdebug('letting storpool-common know')
-    reactive.set_state('storpool-common.stop')
+    rdebug('letting storpool-openstack-integration know')
+    reactive.set_state('storpool-osi.stop')
 
     reactive.set_state('storpool-beacon.stopped')
     for state in STATES_REDO['set'] + STATES_REDO['unset']:

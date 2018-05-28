@@ -7,7 +7,6 @@ from __future__ import print_function
 import subprocess
 
 from charms import reactive
-from charms.reactive import helpers as rhelpers
 from charmhelpers.core import hookenv
 
 from spcharms import config as spconfig
@@ -234,9 +233,6 @@ def reinstall():
 def remove_leftovers():
     """
     Clean up on deinstallation.
-    If the "storpool-osi.no-propagate-stop" reactive state is set,
-    do not set the "stop" states for the lower layers; the uppper layers or
-    charms have taken care of that.
     """
     rdebug('storpool-osi.stop invoked')
     reactive.remove_state('storpool-osi.stop')
@@ -244,11 +240,8 @@ def remove_leftovers():
     rdebug('uninstalling any OpenStack-related StorPool packages')
     sprepo.unrecord_packages('storpool-osi')
 
-    if not rhelpers.is_state('storpool-osi.no-propagate-stop'):
-        rdebug('letting storpool-common know')
-        reactive.set_state('storpool-common.stop')
-    else:
-        rdebug('apparently someone else will/has let storpool-common know')
+    rdebug('letting storpool-common know')
+    reactive.set_state('storpool-common.stop')
 
     reactive.set_state('storpool-osi.stopped')
     for state in STATES_REDO['set'] + STATES_REDO['unset']:
