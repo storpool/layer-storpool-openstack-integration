@@ -6,22 +6,15 @@ from __future__ import print_function
 
 import os.path
 
-from charms import reactive
-from charmhelpers.core import hookenv, host
+from charmhelpers.core import host
 
 from spcharms import config as spconfig
 from spcharms import error as sperror
 from spcharms import repo as sprepo
-from spcharms import states as spstates
 from spcharms import status as spstatus
 from spcharms import utils as sputils
 
-STATES_REDO = {
-    'set': [],
-    'unset': [
-        'storpool-block.block-started',
-    ],
-}
+from spcharms.run import storpool_beacon as run_beacon
 
 
 def rdebug(s):
@@ -71,7 +64,6 @@ def enable_and_start():
     """
     if sputils.check_in_lxc():
         rdebug('running in an LXC container, not doing anything more')
-        reactive.set_state('storpool-block.block-started')
         return
 
     sputils.check_cgroups('block')
@@ -80,60 +72,24 @@ def enable_and_start():
     host.service_resume('storpool_block')
     if os.path.isfile('/usr/sbin/storpool_stat.bin'):
         host.service_resume('storpool_stat')
-    reactive.set_state('storpool-block.block-started')
 
 
-@reactive.when('storpool-helper.config-set')
-@reactive.when('storpool-repo-add.available')
-@reactive.when('storpool-common.config-written')
-@reactive.when('storpool-beacon.beacon-started')
-@reactive.when_not('storpool-block.block-started')
-@reactive.when_not('storpool-block.stopped')
 def run():
     """
     Invoke install_package() and enable_and_start() as needed.
     """
-    try:
-        install_package()
-        enable_and_start()
-    except sperror.StorPoolNoConfigException as e_cfg:
-        hookenv.log('block: missing configuration: {m}'
-                    .format(m=', '.join(e_cfg.missing)),
-                    hookenv.INFO)
-    except sperror.StorPoolPackageInstallException as e_pkg:
-        hookenv.log('block: could not install the {names} packages: {e}'
-                    .format(names=' '.join(e_pkg.names), e=e_pkg.cause),
-                    hookenv.ERROR)
-    except sperror.StorPoolNoCGroupsException as e_cfg:
-        hookenv.log('block: {e}'.format(e=e_cfg), hookenv.ERROR)
+    rdebug('Run, beacon, run!')
+    run_beacon.run()
+    rdebug('Returning to the storpool_block setup')
+    install_package()
+    enable_and_start()
 
 
-@reactive.when('storpool-block.block-started')
-@reactive.when_not('storpool-common.config-written')
-@reactive.when_not('storpool-block.stopped')
-def reinstall():
-    """
-    Trigger a reinstall and restart of the `storpool_block` service.
-    """
-    reactive.remove_state('storpool-block.block-started')
-
-
-@reactive.hook('install')
-def register():
-    """
-    Register our hook state mapping.
-    """
-    spstates.register('storpool-block', {'upgrade-charm': STATES_REDO})
-
-
-@reactive.when('storpool-block.stop')
-@reactive.when_not('storpool-block.stopped')
-def remove_leftovers():
+def stop():
     """
     Remove the installed packages and stop the service.
     """
     rdebug('storpool-block.stop invoked')
-    reactive.remove_state('storpool-block.stop')
 
     if not sputils.check_in_lxc():
         rdebug('stopping and disabling the storpool_block service')
@@ -143,8 +99,4 @@ def remove_leftovers():
         sprepo.unrecord_packages('storpool-block')
 
     rdebug('let storpool-beacon know')
-    reactive.set_state('storpool-beacon.stop')
-
-    reactive.set_state('storpool-block.stopped')
-    for state in STATES_REDO['set'] + STATES_REDO['unset']:
-        reactive.remove_state(state)
+    run_beacon.stop()

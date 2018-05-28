@@ -18,30 +18,6 @@ from spcharms import error as sperror
 from spcharms import utils as sputils
 
 
-class MockReactive(object):
-    def r_clear_states(self):
-        self.states = set()
-
-    def __init__(self):
-        self.r_clear_states()
-
-    def set_state(self, name):
-        self.states.add(name)
-
-    def remove_state(self, name):
-        if name in self.states:
-            self.states.remove(name)
-
-    def is_state(self, name):
-        return name in self.states
-
-    def r_get_states(self):
-        return set(self.states)
-
-    def r_set_states(self, states):
-        self.states = set(states)
-
-
 initializing_config = None
 
 
@@ -86,7 +62,6 @@ class MockConfig(object):
                              '"{name}" attribute'.format(name=name))
 
 
-r_state = MockReactive()
 r_config = MockConfig()
 
 # Do not give hookenv.config() a chance to run at all
@@ -95,9 +70,6 @@ r_config = MockConfig()
 
 def mock_reactive_states(f):
     def inner1(inst, *args, **kwargs):
-        @mock.patch('charms.reactive.set_state', new=r_state.set_state)
-        @mock.patch('charms.reactive.remove_state', new=r_state.remove_state)
-        @mock.patch('charms.reactive.helpers.is_state', new=r_state.is_state)
         @mock.patch('spcharms.config.m', new=lambda: r_config)
         def inner2(*args, **kwargs):
             return f(inst, *args, **kwargs)
@@ -135,7 +107,7 @@ def exec_with_output(cmd):
                          .format(cmd=cmd))
 
 
-from reactive import storpool_openstack_integration as testee
+from spcharms.run import storpool_openstack_integration as testee
 
 
 class TestStorPoolOpenStack(unittest.TestCase):
@@ -147,7 +119,6 @@ class TestStorPoolOpenStack(unittest.TestCase):
         Clean up the reactive states information between tests.
         """
         super(TestStorPoolOpenStack, self).setUp()
-        r_state.r_clear_states()
         r_config.r_clear_config()
         self.save_sputils_err = sputils.err
         sputils.err = lambda *args: self.fail_on_err(*args)
@@ -169,118 +140,62 @@ class TestStorPoolOpenStack(unittest.TestCase):
         Test that the reactive states are properly (re)set when
         the charm configuration changes.
         """
-        states = {
-            'all': set(),
-        }
 
         # Reset everything if there is no configuration
-        r_state.r_set_states(states['all'])
         self.assertRaises(sperror.StorPoolNoConfigException,
                           testee.config_changed)
-        self.assertEquals(set(), r_state.r_get_states())
 
         r_config.r_set('storpool_version', '', False)
-        r_state.r_set_states(states['all'])
         self.assertRaises(sperror.StorPoolNoConfigException,
                           testee.config_changed)
-        self.assertEquals(set(), r_state.r_get_states())
 
         r_config.r_clear_config()
         r_config.r_set('storpool_openstack_version', '', False)
-        r_state.r_set_states(states['all'])
         self.assertRaises(sperror.StorPoolNoConfigException,
                           testee.config_changed)
-        self.assertEquals(set(), r_state.r_get_states())
 
         r_config.r_set('storpool_version', '', False)
-        r_state.r_set_states(states['all'])
         self.assertRaises(sperror.StorPoolNoConfigException,
                           testee.config_changed)
-        self.assertEquals(set(), r_state.r_get_states())
 
         # ...or if only the storpool_version is defined
         r_config.r_clear_config()
         r_config.r_set('storpool_version', '0.1.0', False)
-        r_state.r_set_states(states['all'])
         self.assertRaises(sperror.StorPoolNoConfigException,
                           testee.config_changed)
-        self.assertEquals(set(), r_state.r_get_states())
 
         r_config.r_set('storpool_openstack_version', '', False)
-        r_state.r_set_states(states['all'])
         self.assertRaises(sperror.StorPoolNoConfigException,
                           testee.config_changed)
-        self.assertEquals(set(), r_state.r_get_states())
 
         # ...or if only the storpool_openstack_version is defined
         r_config.r_clear_config()
         r_config.r_set('storpool_openstack_version', '0.1.0', False)
-        r_state.r_set_states(states['all'])
         self.assertRaises(sperror.StorPoolNoConfigException,
                           testee.config_changed)
-        self.assertEquals(set(), r_state.r_get_states())
 
         r_config.r_set('storpool_version', '', False)
-        r_state.r_set_states(states['all'])
         self.assertRaises(sperror.StorPoolNoConfigException,
                           testee.config_changed)
-        self.assertEquals(set(), r_state.r_get_states())
 
         # If both are set and nothing is changed...
-        # ...we either set the config state...
-        r_state.r_set_states(set())
         r_config.r_set('storpool_version', '0.1.0', False)
         testee.config_changed()
-        self.assertEquals(set(), r_state.r_get_states())
-
-        # ...or at least we do not remove it...
-        testee.config_changed()
-        self.assertEquals(set(), r_state.r_get_states())
-
-        # ...or we preserve both states
-        r_state.r_set_states(states['all'])
-        testee.config_changed()
-        self.assertEquals(states['all'], r_state.r_get_states())
-
-        # ...or at least we set the configured one
-        r_state.r_set_states(set())
-        testee.config_changed()
-        self.assertEquals(states['all'], r_state.r_get_states())
 
         # But it's a little different when the configuration has
         # just changed, isn't it?  Most of it is the same...
         r_config.r_clear_config()
         r_config.r_set('storpool_version', '0.1.0', True)
-        r_state.r_set_states(states['all'])
         self.assertRaises(sperror.StorPoolNoConfigException,
                           testee.config_changed)
-        self.assertEquals(set(), r_state.r_get_states())
 
         r_config.r_clear_config()
         r_config.r_set('storpool_openstack_version', '0.1.0', True)
-        r_state.r_set_states(states['all'])
         self.assertRaises(sperror.StorPoolNoConfigException,
                           testee.config_changed)
-        self.assertEquals(set(), r_state.r_get_states())
 
-        r_state.r_set_states(set())
         r_config.r_set('storpool_version', '0.1.0', True)
         testee.config_changed()
-        self.assertEquals(set(), r_state.r_get_states())
-
-        testee.config_changed()
-        self.assertEquals(set(), r_state.r_get_states())
-
-        # ...but here comes the difference: if the software versions
-        # have changed, we reset the "installed" state since, well,
-        # we just might need to install different versions.
-        r_state.r_set_states(states['all'])
-        testee.config_changed()
-        self.assertEquals(set(), r_state.r_get_states())
-
-        r_state.r_set_states(set())
-        testee.config_changed()
-        self.assertEquals(set(), r_state.r_get_states())
 
     @mock_reactive_states
     @mock.patch('charmhelpers.core.hookenv.config', new=lambda: r_config)
@@ -301,7 +216,6 @@ class TestStorPoolOpenStack(unittest.TestCase):
         self.assertEquals(count_npset + 1, npset.call_count)
         self.assertEquals(count_install, install_packages.call_count)
         self.assertEquals(count_record, record_packages.call_count)
-        self.assertEquals(set(), r_state.r_get_states())
 
         # Now give it something to install, but tell it not to.
         r_config.r_set('storpool_version', '0.1.0', False)
@@ -311,13 +225,11 @@ class TestStorPoolOpenStack(unittest.TestCase):
         self.assertEquals(count_npset + 2, npset.call_count)
         self.assertEquals(count_install, install_packages.call_count)
         self.assertEquals(count_record, record_packages.call_count)
-        self.assertEquals(set(), r_state.r_get_states())
 
         def raise_spe(_):
             raise sperror.StorPoolPackageInstallException([], 'oops')
 
         # Okay, now let's give it something to install... and fail.
-        r_state.r_set_states(set())
         r_config.r_clear_config()
         r_config.r_set('storpool_version', '0.1.0', False)
         r_config.r_set('storpool_openstack_version', '3.2.1', False)
@@ -329,7 +241,6 @@ class TestStorPoolOpenStack(unittest.TestCase):
         self.assertEquals(count_npset + 4, npset.call_count)
         self.assertEquals(count_install + 1, install_packages.call_count)
         self.assertEquals(count_record, record_packages.call_count)
-        self.assertEquals(set(), r_state.r_get_states())
 
         # Right, now let's pretend that there was nothing to install
         install_packages.return_value = []
@@ -337,16 +248,13 @@ class TestStorPoolOpenStack(unittest.TestCase):
         self.assertEquals(count_npset + 7, npset.call_count)
         self.assertEquals(count_install + 2, install_packages.call_count)
         self.assertEquals(count_record, record_packages.call_count)
-        self.assertEquals(set(), r_state.r_get_states())
 
         # And now for the most common case, something to install...
-        r_state.r_set_states(set())
         install_packages.return_value = ['storpool-openstack-integration']
         testee.install_package()
         self.assertEquals(count_npset + 10, npset.call_count)
         self.assertEquals(count_install + 3, install_packages.call_count)
         self.assertEquals(count_record + 1, record_packages.call_count)
-        self.assertEquals(set(), r_state.r_get_states())
 
     # Now this one is a doozy...
     @mock_reactive_states

@@ -7,23 +7,16 @@ import os
 import subprocess
 import tempfile
 
-from charms import reactive
 from charmhelpers.core import hookenv, host, templating
 
 from spcharms import config as spconfig
 from spcharms import error as sperror
 from spcharms import repo as sprepo
-from spcharms import states as spstates
 from spcharms import status as spstatus
 from spcharms import txn
 from spcharms import utils as sputils
 
-STATES_REDO = {
-    'set': [],
-    'unset': [
-        'storpool-common.config-written',
-    ],
-}
+from spcharms.run import storpool_config as run_config
 
 
 KERNEL_REQUIRED_PARAMS = (
@@ -235,68 +228,25 @@ def copy_config_files():
     spstatus.npset('maintenance', 'restarting the system logging service')
     host.service_restart('rsyslog')
 
-    reactive.set_state('storpool-common.config-written')
     spstatus.npset('maintenance', '')
 
 
-@reactive.when('storpool-helper.config-set')
-@reactive.when('storpool-repo-add.available')
-@reactive.when('l-storpool-config.config-network')
-@reactive.when_not('storpool-common.config-written')
-@reactive.when_not('storpool-common.stopped')
 def run():
-    try:
-        install_package()
-        copy_config_files()
-    except sperror.StorPoolNoConfigException as e_cfg:
-        hookenv.log('common: missing configuration: {m}'
-                    .format(m=', '.join(e_cfg.missing)),
-                    hookenv.INFO)
-    except sperror.StorPoolPackageInstallException as e_pkg:
-        hookenv.log('common: could not install the {names} packages: {e}'
-                    .format(names=' '.join(e_pkg.names), e=e_pkg.cause),
-                    hookenv.ERROR)
-    except sperror.StorPoolNoCGroupsException as e_cfg:
-        hookenv.log('common: unconfigured control groups: {m}'
-                    .format(m=', '.join(e_cfg.missing)),
-                    hookenv.ERROR)
-    except sperror.StorPoolException as e:
-        hookenv.log('common: StorPool installation problem: {e}'.format(e=e))
+    rdebug('Run, config, run!')
+    run_config.run()
+    rdebug('Returning to the storpool-common setup')
+    install_package()
+    copy_config_files()
 
 
-@reactive.when('storpool-common.config-written')
-@reactive.when_not('l-storpool-config.config-network')
-@reactive.when_not('storpool-common.stopped')
-def rewrite():
-    """
-    Trigger a recheck of the StorPool configuration files.
-    """
-    reactive.remove_state('storpool-common.config-written')
-
-
-@reactive.hook('install')
-def register():
-    """
-    Register our hook state mappings.
-    """
-    spstates.register('storpool-common', {'upgrade-charm': STATES_REDO})
-
-
-@reactive.when('storpool-common.stop')
-@reactive.when_not('storpool-common.stopped')
-def remove_leftovers():
+def stop():
     """
     Clean up, remove the config files, uninstall the packages.
     """
     rdebug('storpool-common.stop invoked')
-    reactive.remove_state('storpool-common.stop')
 
     rdebug('removing any base StorPool packages')
     sprepo.unrecord_packages('storpool-common')
 
     rdebug('letting storpool-config know')
-    reactive.set_state('l-storpool-config.stop')
-
-    reactive.set_state('storpool-common.stopped')
-    for state in STATES_REDO['set'] + STATES_REDO['unset']:
-        reactive.remove_state(state)
+    run_config.stop()

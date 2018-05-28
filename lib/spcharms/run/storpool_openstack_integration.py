@@ -6,23 +6,16 @@ from __future__ import print_function
 
 import subprocess
 
-from charms import reactive
 from charmhelpers.core import hookenv
 
 from spcharms import config as spconfig
 from spcharms import error as sperror
 from spcharms import repo as sprepo
-from spcharms import states as spstates
 from spcharms import status as spstatus
 from spcharms import txn
 from spcharms import utils as sputils
 
-STATES_REDO = {
-    'set': ['storpool-osi.configure'],
-    'unset': [
-        'storpool-osi.installed',
-    ],
-}
+from spcharms.run import storpool_common as run_common
 
 
 def rdebug(s):
@@ -32,23 +25,11 @@ def rdebug(s):
     sputils.rdebug(s, prefix='openstack-integration')
 
 
-@reactive.hook('install')
-def register():
-    """
-    Register our hook state mappings.
-    """
-    spstates.register('storpool-openstack-integration', {
-        'config-changed': STATES_REDO,
-        'upgrade-charm': STATES_REDO,
-    })
-
-
 def config_changed():
     """
     Check if all the configuration settings have been supplied and/or changed.
     """
     rdebug('config-changed happened')
-    reactive.remove_state('storpool-osi.configure')
     config = spconfig.m()
 
     spver = config.get('storpool_version', None)
@@ -59,10 +40,6 @@ def config_changed():
            .format(xnot=' not' if sposiver is None else ''))
     no_spver = spver is None or spver == ''
     no_sposiver = sposiver is None or sposiver == ''
-    if no_spver or no_sposiver:
-        rdebug('removing any progress states')
-        for state in STATES_REDO['unset']:
-            reactive.remove_state(state)
     if no_spver:
         raise sperror.StorPoolNoConfigException(['storpool_version'])
     if no_sposiver:
@@ -122,7 +99,6 @@ def enable_and_start():
     """
     if not hookenv.config()['storpool_openstack_install']:
         rdebug('skipping the installation into containers')
-        reactive.set_state('storpool-osi.installed')
         return
 
     spstatus.npset('maintenance', 'installing the OpenStack integration into '
@@ -175,59 +151,26 @@ def enable_and_start():
             rdebug('"service nova-compute restart" returned '
                    'a non-zero exit code {res}, ignoring it'.format(res=res))
 
-    reactive.set_state('storpool-osi.installed')
     spstatus.npset('maintenance', '')
 
 
-@reactive.when('storpool-helper.config-set')
-@reactive.when('storpool-repo-add.available')
-@reactive.when('storpool-common.config-written')
-@reactive.when_not('storpool-osi.installed')
-@reactive.when_not('storpool-osi.stopped')
 def run():
-    try:
-        config_changed()
-        install_package()
-        enable_and_start()
-    except sperror.StorPoolNoConfigException as e_cfg:
-        hookenv.log('osi: missing configuration: {m}'
-                    .format(m=', '.join(e_cfg.missing)),
-                    hookenv.INFO)
-    except sperror.StorPoolPackageInstallException as e_pkg:
-        hookenv.log('osi: could not install the {names} packages: {e}'
-                    .format(names=' '.join(e_pkg.names), e=e_pkg.cause),
-                    hookenv.ERROR)
-    except sperror.StorPoolNoCGroupsException as e_cfg:
-        hookenv.log('osi: unconfigured control groups: {m}'
-                    .format(m=', '.join(e_cfg.missing)),
-                    hookenv.ERROR)
+    rdebug('Run, common, run!')
+    run_common.run()
+    rdebug('Returning to the StorPool OpenStack integration setup')
+    config_changed()
+    install_package()
+    enable_and_start()
 
 
-@reactive.when('storpool-osi.installed')
-@reactive.when_not('storpool-common.config-written')
-@reactive.when_not('storpool-osi.stopped')
-def reinstall():
-    """
-    Rerun both the package installation and the configuration itself.
-    """
-    reactive.remove_state('storpool-osi.installed')
-
-
-@reactive.when('storpool-osi.stop')
-@reactive.when_not('storpool-osi.stopped')
-def remove_leftovers():
+def stop():
     """
     Clean up on deinstallation.
     """
     rdebug('storpool-osi.stop invoked')
-    reactive.remove_state('storpool-osi.stop')
 
     rdebug('uninstalling any OpenStack-related StorPool packages')
     sprepo.unrecord_packages('storpool-osi')
 
     rdebug('letting storpool-common know')
-    reactive.set_state('storpool-common.stop')
-
-    reactive.set_state('storpool-osi.stopped')
-    for state in STATES_REDO['set'] + STATES_REDO['unset']:
-        reactive.remove_state(state)
+    run_common.stop()

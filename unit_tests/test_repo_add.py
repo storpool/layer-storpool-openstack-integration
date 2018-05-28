@@ -82,7 +82,7 @@ r_config = MockConfig()
 spconfig.m = lambda: r_config
 
 
-from reactive import storpool_repo_add as testee
+from spcharms.run import storpool_repo_add as testee
 
 REPO_URL = 'http://jrl:no-idea@nonexistent.storpool.example.com/'
 

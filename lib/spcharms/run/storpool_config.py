@@ -6,24 +6,17 @@ from __future__ import print_function
 import tempfile
 import subprocess
 
-from charms import reactive
-from charmhelpers.core import hookenv, templating
+from charmhelpers.core import templating
 
 from spcharms import config as spconfig
 from spcharms.confighelpers import network as spcnetwork
 from spcharms import error as sperror
 from spcharms import repo as sprepo
-from spcharms import states as spstates
 from spcharms import status as spstatus
 from spcharms import txn
 from spcharms import utils as sputils
 
-STATES_REDO = {
-    'set': [],
-    'unset': [
-        'l-storpool-config.config-network',
-    ],
-}
+from spcharms.run import storpool_repo_add as run_repo
 
 
 def rdebug(s):
@@ -31,17 +24,6 @@ def rdebug(s):
     Pass the diagnostic message string `s` to the central diagnostic logger.
     """
     sputils.rdebug(s, prefix='config')
-
-
-@reactive.hook('install')
-def register():
-    """
-    Register our hook state mappings.
-    """
-    spstates.register('storpool-config', {
-        'config-changed': STATES_REDO,
-        'upgrade-charm': STATES_REDO,
-    })
 
 
 def config_changed():
@@ -52,8 +34,6 @@ def config_changed():
     config = spconfig.m()
 
     # Remove any states that say we have accomplished anything...
-    for state in STATES_REDO['unset']:
-        reactive.remove_state(state)
     spconfig.unset_our_id()
 
     spconf = config.get('storpool_conf', None)
@@ -141,7 +121,6 @@ def setup_interfaces():
     """
     if sputils.check_in_lxc():
         rdebug('running in an LXC container, not setting up interfaces')
-        reactive.set_state('l-storpool-config.config-network')
         return
 
     rdebug('trying to parse the StorPool interface configuration')
@@ -156,44 +135,24 @@ def setup_interfaces():
     spcnetwork.fixup_interfaces(ifaces)
 
     rdebug('well, looks like it is all done...')
-    reactive.set_state('l-storpool-config.config-network')
     spstatus.npset('maintenance', '')
 
 
-@reactive.when('storpool-helper.config-set')
-@reactive.when('storpool-repo-add.available')
-@reactive.when_not('l-storpool-config.config-network')
-@reactive.when_not('l-storpool-config.stopped')
 def run():
-    try:
-        config_changed()
-        install_package()
-        write_out_config()
-        setup_interfaces()
-    except sperror.StorPoolNoConfigException as e_cfg:
-        hookenv.log('config: missing configuration: {m}'
-                    .format(m=', '.join(e_cfg.missing)),
-                    hookenv.INFO)
-    except sperror.StorPoolPackageInstallException as e_pkg:
-        hookenv.log('config: could not install the {names} packages: {e}'
-                    .format(names=' '.join(e_pkg.names), e=e_pkg.cause),
-                    hookenv.ERROR)
-    except sperror.StorPoolNoCGroupsException as e_cfg:
-        hookenv.log('config: unconfigured control groups: {m}'
-                    .format(m=', '.join(e_cfg.missing)),
-                    hookenv.ERROR)
-    except sperror.StorPoolException as e:
-        hookenv.log('config: StorPool installation problem: {e}'.format(e=e))
+    rdebug('Run, repo, run!')
+    run_repo.run()
+    rdebug('Returning to the storpool-config setup')
+    config_changed()
+    install_package()
+    write_out_config()
+    setup_interfaces()
 
 
-@reactive.when('l-storpool-config.stop')
-@reactive.when_not('l-storpool-config.stopped')
-def remove_leftovers():
+def stop():
     """
     Clean up, remove configuration files, uninstall packages.
     """
     rdebug('storpool-config.stop invoked')
-    reactive.remove_state('l-storpool-config.stop')
 
     try:
         rdebug('about to roll back any txn-installed files')
@@ -235,9 +194,4 @@ def remove_leftovers():
     sprepo.unrecord_packages('storpool-config')
 
     rdebug('let the storpool-repo layer know that we are shutting down')
-    reactive.set_state('storpool-repo-add.stop')
-
-    rdebug('goodbye, weird world!')
-    reactive.set_state('l-storpool-config.stopped')
-    for state in STATES_REDO['set'] + STATES_REDO['unset']:
-        reactive.remove_state(state)
+    run_repo.stop()

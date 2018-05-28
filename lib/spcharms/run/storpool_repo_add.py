@@ -9,12 +9,10 @@ import os
 import tempfile
 import subprocess
 
-from charms import reactive
 from charmhelpers.core import hookenv
 
 from spcharms import config as spconfig
 from spcharms import error as sperror
-from spcharms import states as spstates
 from spcharms import status as spstatus
 from spcharms import utils as sputils
 
@@ -219,9 +217,6 @@ def do_update_apt():
     rdebug('update-apt seems fine')
     spstatus.npset('maintenance', '')
 
-    # And, finally, the others can do stuff, too
-    reactive.set_state('storpool-repo-add.available')
-
 
 STATES_REDO = {
     'set': [
@@ -230,19 +225,6 @@ STATES_REDO = {
         'storpool-repo-add.available',
     ],
 }
-
-
-@reactive.hook('install')
-def install():
-    """
-    Run a full check-install-update cycle upon first installation.
-    """
-    rdebug('storpool-repo-add.install invoked')
-    spstates.register('storpool-repo-add', {
-        'config-changed': STATES_REDO,
-        'upgrade-charm': STATES_REDO,
-    })
-    spstates.handle_single(STATES_REDO)
 
 
 def try_config():
@@ -260,22 +242,14 @@ def try_config():
         rdebug('got a repository URL: {url}'.format(url=repo_url))
 
 
-@reactive.when('storpool-helper.config-set')
-@reactive.when_not('storpool-repo-add.available')
 def run():
-    try:
-        try_config()
-        do_install_apt_key()
-        do_install_apt_repo()
-        do_update_apt()
-    except sperror.StorPoolNoConfigException as e_cfg:
-        hookenv.log('repo-add: missing configuration: {m}'
-                    .format(m=', '.join(e_cfg.missing)),
-                    hookenv.INFO)
+    rdebug('And now we are at the bottom of the well...')
+    try_config()
+    do_install_apt_key()
+    do_install_apt_repo()
+    do_update_apt()
 
 
-@reactive.when('storpool-repo-add.stop')
-@reactive.when_not('storpool-repo-add.stopped')
 def stop():
     """
     Clean up and no longer attempt to install anything.
@@ -292,10 +266,3 @@ def stop():
                        .format(name=fname, e=e))
         else:
             rdebug('- no {name} to remove'.format(name=fname))
-
-    for state in STATES_REDO['set'] + STATES_REDO['unset']:
-        reactive.remove_state(state)
-
-    reactive.remove_state('storpool-repo-add.stop')
-    reactive.set_state('storpool-repo-add.stopped')
-    spstatus.npset('maintenance', '')
