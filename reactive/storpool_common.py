@@ -82,14 +82,15 @@ def install_package():
     if spver is None or spver == '':
         rdebug('no storpool_version key in the charm config yet')
         return
+    spmajmin = '.'.join(spver.split('.')[0:2])
 
     spstatus.npset('maintenance', 'installing the StorPool common packages')
     (err, newly_installed) = sprepo.install_packages({
-        'storpool-cli': spver,
-        'storpool-common': spver,
-        'storpool-etcfiles': spver,
-        'kmod-storpool-' + os.uname().release: spver,
-        'python-storpool': spver,
+        'storpool-cli-' + spmajmin: spver,
+        'storpool-common-' + spmajmin: spver,
+        'storpool-etcfiles-' + spmajmin: spver,
+        'kmod-storpool-' + spmajmin + '-' + os.uname().release: spver,
+        'python-storpool-' + spmajmin: spver,
     })
     if err is not None:
         rdebug('oof, we could not install packages: {err}'.format(err=err))
@@ -239,7 +240,9 @@ def copy_config_files():
     Install some configuration files.
     """
     spstatus.npset('maintenance', 'copying the storpool-common config files')
-    basedir = '/usr/lib/storpool/etcfiles/storpool-common'
+    spver = spconfig.m().get('storpool_version', None)
+    spmajmin = '.'.join(spver.split('.')[0:2])
+    basedir = '/usr/lib/storpool/etcfiles/storpool-common-' + spmajmin
     for f in (
         '/etc/rsyslog.d/99-StorPool.conf',
         '/etc/sysctl.d/99-StorPool.conf',

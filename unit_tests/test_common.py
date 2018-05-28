@@ -298,7 +298,7 @@ class TestStorPoolCommon(unittest.TestCase):
             self.assertEquals(set([INSTALLED_STATE]), r_state.r_get_states())
 
     @mock_reactive_states
-    @mock.patch('charmhelpers.core.hookenv.config', new=lambda: {})
+    @mock.patch('charmhelpers.core.hookenv.config', new=lambda: r_config)
     @mock.patch('spcharms.status.npset')
     @mock.patch('spcharms.txn.install')
     @mock.patch('charmhelpers.core.host.service_restart')
@@ -308,6 +308,7 @@ class TestStorPoolCommon(unittest.TestCase):
         """
         count_txn_install = txn_install.call_count
 
+        r_config.r_set('storpool_version', '18.01.0.deadbeef', changed=False)
         testee.copy_config_files()
         self.assertEqual(count_txn_install + 2, txn_install.call_count)
         service_restart.assert_called_once_with('rsyslog')

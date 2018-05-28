@@ -53,10 +53,11 @@ def install_package():
     if spver is None or spver == '':
         rdebug('no storpool_version key in the charm config yet')
         return
+    spmajmin = '.'.join(spver.split('.')[0:2])
 
     spstatus.npset('maintenance', 'installing the StorPool block packages')
     (err, newly_installed) = sprepo.install_packages({
-        'storpool-block': spver,
+        'storpool-block-' + spmajmin: spver,
     })
     if err is not None:
         rdebug('oof, we could not install packages: {err}'.format(err=err))

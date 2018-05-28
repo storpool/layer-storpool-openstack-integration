@@ -113,6 +113,7 @@ def install_package():
     if spinstall is None:
         rdebug('no storpool_openstack_install key in the charm config yet')
         return
+    spmajmin = '.'.join(spver.split('.')[0:2])
 
     if not spinstall:
         rdebug('skipping the installation of the OpenStack integration')
@@ -121,8 +122,8 @@ def install_package():
 
     spstatus.npset('maintenance', 'installing the StorPool OpenStack packages')
     (err, newly_installed) = sprepo.install_packages({
-        'storpool-block': spver,
-        'python-storpool-spopenstack': spver,
+        'storpool-block-' + spmajmin: spver,
+        'python-storpool-spopenstack-' + spmajmin: spver,
         'storpool-openstack-integration': sposiver,
     })
     if err is not None:
