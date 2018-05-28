@@ -14,6 +14,8 @@ root_path = os.path.realpath('lib')
 if root_path not in sys.path:
     sys.path.insert(0, root_path)
 
+from spcharms import error as sperror
+
 
 class MockReactive(object):
     def r_clear_states(self):
@@ -103,7 +105,6 @@ def mock_reactive_states(f):
 
 from reactive import storpool_block as testee
 
-INSTALLED_STATE = 'storpool-block.package-installed'
 STARTED_STATE = 'storpool-block.block-started'
 
 
@@ -142,13 +143,14 @@ class TestStorPoolBlock(unittest.TestCase):
         self.assertEquals(count_npset, npset.call_count)
         self.assertEquals(count_install, install_packages.call_count)
         self.assertEquals(count_record, record_packages.call_count)
-        self.assertEquals(set([INSTALLED_STATE]), r_state.r_get_states())
+        self.assertEquals(set(), r_state.r_get_states())
 
         # Check that it doesn't do anything without a StorPool version
         r_state.r_set_states(set())
         r_config.r_clear_config()
         check_in_lxc.return_value = False
-        testee.install_package()
+        self.assertRaises(sperror.StorPoolNoConfigException,
+                          testee.install_package)
         self.assertEquals(count_in_lxc + 2, check_in_lxc.call_count)
         self.assertEquals(count_npset + 1, npset.call_count)
         self.assertEquals(count_install, install_packages.call_count)
@@ -158,7 +160,8 @@ class TestStorPoolBlock(unittest.TestCase):
         # Okay, now let's give it something to install... and fail.
         r_config.r_set('storpool_version', '0.1.0', False)
         install_packages.return_value = ('oops', [])
-        testee.install_package()
+        self.assertRaises(sperror.StorPoolPackageInstallException,
+                          testee.install_package)
         self.assertEquals(count_in_lxc + 3, check_in_lxc.call_count)
         self.assertEquals(count_npset + 3, npset.call_count)
         self.assertEquals(count_install + 1, install_packages.call_count)
@@ -172,7 +175,7 @@ class TestStorPoolBlock(unittest.TestCase):
         self.assertEquals(count_npset + 6, npset.call_count)
         self.assertEquals(count_install + 2, install_packages.call_count)
         self.assertEquals(count_record, record_packages.call_count)
-        self.assertEquals(set([INSTALLED_STATE]), r_state.r_get_states())
+        self.assertEquals(set(), r_state.r_get_states())
 
         # And now for the most common case, something to install...
         r_state.r_set_states(set())
@@ -182,7 +185,7 @@ class TestStorPoolBlock(unittest.TestCase):
         self.assertEquals(count_npset + 9, npset.call_count)
         self.assertEquals(count_install + 3, install_packages.call_count)
         self.assertEquals(count_record + 1, record_packages.call_count)
-        self.assertEquals(set([INSTALLED_STATE]), r_state.r_get_states())
+        self.assertEquals(set(), r_state.r_get_states())
 
     @mock_reactive_states
     @mock.patch('charmhelpers.core.hookenv.config', new=lambda: r_config)
@@ -210,7 +213,8 @@ class TestStorPoolBlock(unittest.TestCase):
         r_state.r_set_states(set())
         check_in_lxc.return_value = False
         check_cgroups.return_value = False
-        testee.enable_and_start()
+        self.assertRaises(sperror.StorPoolNoCGroupsException,
+                          testee.enable_and_start)
         self.assertEquals(count_in_lxc + 2, check_in_lxc.call_count)
         self.assertEquals(count_cgroups + 1, check_cgroups.call_count)
         self.assertEquals(set(), r_state.r_get_states())

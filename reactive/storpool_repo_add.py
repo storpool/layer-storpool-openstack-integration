@@ -13,6 +13,7 @@ from charms import reactive
 from charmhelpers.core import hookenv
 
 from spcharms import config as spconfig
+from spcharms import error as sperror
 from spcharms import states as spstates
 from spcharms import status as spstatus
 from spcharms import utils as sputils
@@ -177,48 +178,7 @@ def install_apt_repo():
         print(text, file=tempf, end='', flush=True)
         os.rename(tempf.name, filename)
 
-    reactive.set_state('storpool-repo-add.update-apt')
-    reactive.remove_state('storpool-repo-add.updated-apt')
 
-
-def report_no_config():
-    """
-    Note that the `storpool_repo_url` has not been set yet.
-    """
-    rdebug('no StorPool configuration yet')
-    spstatus.npset('maintenance', 'waiting for the StorPool configuration')
-
-
-@reactive.when('storpool-repo-add.install-apt-key')
-@reactive.when_not('storpool-repo-add.configured')
-def no_config_for_apt_key():
-    """
-    Note that the `storpool_repo_url` has not been set yet.
-    """
-    report_no_config()
-
-
-@reactive.when('storpool-repo-add.install-apt-repo')
-@reactive.when_not('storpool-repo-add.configured')
-def no_config_for_apt_repo():
-    """
-    Note that the `storpool_repo_url` has not been set yet.
-    """
-    report_no_config()
-
-
-@reactive.when('storpool-repo-add.update-apt')
-@reactive.when_not('storpool-repo-add.configured')
-def no_config_for_apt_update():
-    """
-    Note that the `storpool_repo_url` has not been set yet.
-    """
-    report_no_config()
-
-
-@reactive.when('storpool-repo-add.configured')
-@reactive.when('storpool-repo-add.install-apt-key')
-@reactive.when_not('storpool-repo-add.installed-apt-key')
 def do_install_apt_key():
     """
     Check and, if necessary, install the StorPool package signing key.
@@ -231,12 +191,8 @@ def do_install_apt_key():
 
     rdebug('install-apt-key seems fine')
     spstatus.npset('maintenance', '')
-    reactive.set_state('storpool-repo-add.installed-apt-key')
 
 
-@reactive.when('storpool-repo-add.configured')
-@reactive.when('storpool-repo-add.install-apt-repo')
-@reactive.when_not('storpool-repo-add.installed-apt-repo')
 def do_install_apt_repo():
     """
     Check and, if necessary, add the StorPool repository.
@@ -249,13 +205,8 @@ def do_install_apt_repo():
 
     rdebug('install-apt-repo seems fine')
     spstatus.npset('maintenance', '')
-    reactive.set_state('storpool-repo-add.installed-apt-repo')
 
 
-@reactive.when('storpool-repo-add.configured')
-@reactive.when('storpool-repo-add.update-apt')
-@reactive.when('storpool-repo-add.installed-apt-repo')
-@reactive.when_not('storpool-repo-add.updated-apt')
 def do_update_apt():
     """
     Invoke `apt-get update` to fetch data from the StorPool repository.
@@ -267,7 +218,6 @@ def do_update_apt():
 
     rdebug('update-apt seems fine')
     spstatus.npset('maintenance', '')
-    reactive.set_state('storpool-repo-add.updated-apt')
 
     # And, finally, the others can do stuff, too
     reactive.set_state('storpool-repo-add.available')
@@ -275,16 +225,9 @@ def do_update_apt():
 
 STATES_REDO = {
     'set': [
-        'storpool-repo-add.install-apt-key',
-        'storpool-repo-add.install-apt-repo',
-        'storpool-repo-add.update-apt',
-        'storpool-repo-add.configure',
     ],
     'unset': [
-        'storpool-repo-add.installed-apt-key',
-        'storpool-repo-add.installed-apt-repo',
-        'storpool-repo-add.updated-apt',
-        'storpool-repo-add.configured',
+        'storpool-repo-add.available',
     ],
 }
 
@@ -302,25 +245,33 @@ def install():
     spstates.handle_single(STATES_REDO)
 
 
-@reactive.when('storpool-helper.config-set')
-@reactive.when('storpool-repo-add.configure')
-@reactive.when_not('storpool-repo-add.configured')
 def try_config():
     """
     Check if the configuration has been fully set.
     """
     rdebug('reconfigure')
-    reactive.remove_state('storpool-repo-add.configure')
     spstatus.reset_if_allowed('storpool-repo-add')
     config = spconfig.m()
 
     repo_url = config.get('storpool_repo_url', None)
     if repo_url is None or repo_url == '':
-        rdebug('no repository URL set in the config yet')
-        reactive.remove_state('storpool-repo-add.configured')
+        raise sperror.StorPoolNoConfigException(['storpool_repo_url'])
     else:
         rdebug('got a repository URL: {url}'.format(url=repo_url))
-        reactive.set_state('storpool-repo-add.configured')
+
+
+@reactive.when('storpool-helper.config-set')
+@reactive.when_not('storpool-repo-add.available')
+def run():
+    try:
+        try_config()
+        do_install_apt_key()
+        do_install_apt_repo()
+        do_update_apt()
+    except sperror.StorPoolNoConfigException as e_cfg:
+        hookenv.log('repo-add: missing configuration: {m}'
+                    .format(m=', '.join(e_cfg.missing)),
+                    hookenv.INFO)
 
 
 @reactive.when('storpool-repo-add.stop')

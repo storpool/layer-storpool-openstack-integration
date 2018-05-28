@@ -18,6 +18,7 @@ lib_path = os.path.realpath('unit_tests/lib')
 if lib_path not in sys.path:
     sys.path.insert(0, lib_path)
 
+from spcharms import error as sperror
 from spcharms import utils as sputils
 
 
@@ -109,7 +110,6 @@ def mock_reactive_states(f):
 
 from reactive import storpool_common as testee
 
-INSTALLED_STATE = 'storpool-common.package-installed'
 COPIED_STATE = 'storpool-common.config-written'
 
 KERNEL_PARAMS = 'initrd=something swapaccount=1 root=something.else nofb ' \
@@ -187,7 +187,8 @@ class TestStorPoolCommon(unittest.TestCase):
         with mock.patch('reactive.storpool_common.open', mock_file,
                         create=True):
             bypassed.return_value = False
-            self.assertRaises(AssertionError, testee.install_package)
+            self.assertRaises(sperror.StorPoolException,
+                              testee.install_package)
             self.assertEquals(count_npset, npset.call_count)
             self.assertEquals(count_log + 2, h_log.call_count)
             self.assertEquals(count_install, install_packages.call_count)
@@ -200,9 +201,10 @@ class TestStorPoolCommon(unittest.TestCase):
         with mock.patch('reactive.storpool_common.open', mock_file,
                         create=True):
             bypassed.return_value = True
-            testee.install_package()
+            self.assertRaises(sperror.StorPoolNoConfigException,
+                              testee.install_package)
             self.assertEquals(count_npset + 1, npset.call_count)
-            self.assertEquals(count_log + 6, h_log.call_count)
+            self.assertEquals(count_log + 5, h_log.call_count)
             self.assertEquals(count_install, install_packages.call_count)
             self.assertEquals(count_record, record_packages.call_count)
             self.assertEquals(count_call, check_call.call_count)
@@ -213,9 +215,10 @@ class TestStorPoolCommon(unittest.TestCase):
         with mock.patch('reactive.storpool_common.open', mock_file,
                         create=True):
             bypassed.return_value = False
-            testee.install_package()
+            self.assertRaises(sperror.StorPoolNoConfigException,
+                              testee.install_package)
             self.assertEquals(count_npset + 2, npset.call_count)
-            self.assertEquals(count_log + 9, h_log.call_count)
+            self.assertEquals(count_log + 7, h_log.call_count)
             self.assertEquals(count_install, install_packages.call_count)
             self.assertEquals(count_record, record_packages.call_count)
             self.assertEquals(count_call, check_call.call_count)
@@ -232,9 +235,10 @@ class TestStorPoolCommon(unittest.TestCase):
         with mock.patch('reactive.storpool_common.open', mock_file,
                         create=True):
             install_packages.return_value = ('oops', [])
-            testee.install_package()
+            self.assertRaises(sperror.StorPoolPackageInstallException,
+                              testee.install_package)
             self.assertEquals(count_npset + 4, npset.call_count)
-            self.assertEquals(count_log + 14, h_log.call_count)
+            self.assertEquals(count_log + 10, h_log.call_count)
             self.assertEquals(count_install + 1, install_packages.call_count)
             self.assertEquals(count_record, record_packages.call_count)
             self.assertEquals(count_call, check_call.call_count)
@@ -257,7 +261,7 @@ class TestStorPoolCommon(unittest.TestCase):
             check_call.side_effect = raise_notimp
             self.assertRaises(WeirdError, testee.install_package)
             self.assertEquals(count_npset + 7, npset.call_count)
-            self.assertEquals(count_log + 19, h_log.call_count)
+            self.assertEquals(count_log + 15, h_log.call_count)
             self.assertEquals(count_install + 2,
                               install_packages.call_count)
             self.assertEquals(count_record + 1,
@@ -287,7 +291,7 @@ class TestStorPoolCommon(unittest.TestCase):
                         create=True):
             testee.install_package()
             self.assertEquals(count_npset + 11, npset.call_count)
-            self.assertEquals(count_log + 38, h_log.call_count)
+            self.assertEquals(count_log + 33, h_log.call_count)
             self.assertEquals(count_install + 3,
                               install_packages.call_count)
             self.assertEquals(count_record + 2,
@@ -295,7 +299,7 @@ class TestStorPoolCommon(unittest.TestCase):
             self.assertEquals(count_call + 2 + warn_count,
                               check_call.call_count)
             self.assertEquals(count_txn_install + 3, txn_install.call_count)
-            self.assertEquals(set([INSTALLED_STATE]), r_state.r_get_states())
+            self.assertEquals(set(), r_state.r_get_states())
 
     @mock_reactive_states
     @mock.patch('charmhelpers.core.hookenv.config', new=lambda: r_config)

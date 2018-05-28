@@ -18,6 +18,7 @@ lib_path = os.path.realpath('unit_tests/lib')
 if lib_path not in sys.path:
     sys.path.insert(0, lib_path)
 
+from spcharms import error as sperror
 from spcharms import utils as sputils
 
 
@@ -104,9 +105,6 @@ def mock_reactive_states(f):
 
 from reactive import storpool_config as testee
 
-INSTALLED_STATE = 'l-storpool-config.package-installed'
-COPIED_STATE = 'storpool-config.config-written'
-
 
 class TestStorPoolConfig(unittest.TestCase):
     """
@@ -146,22 +144,10 @@ class TestStorPoolConfig(unittest.TestCase):
             ]),
 
             'all': set([
-                'l-storpool-config.config-available',
-                'l-storpool-config.config-written',
                 'l-storpool-config.config-network',
-                'l-storpool-config.package-installed',
-                'l-storpool-config.package-try-install',
-            ]),
-
-            'weird': set([
-                'l-storpool-config.config-written',
-                'l-storpool-config.config-network',
-                'l-storpool-config.package-installed',
             ]),
 
             'got-config': set([
-                'l-storpool-config.config-available',
-                'l-storpool-config.package-try-install',
             ]),
         }
         count_npset = npset.call_count
@@ -170,43 +156,35 @@ class TestStorPoolConfig(unittest.TestCase):
         # No configuration at all
         r_state.r_set_states(states['none'])
         self.kv_unset_call_count = 0
-        testee.config_changed()
+        self.assertRaises(sperror.StorPoolNoConfigException,
+                          testee.config_changed)
         self.assertEquals(states['none'], r_state.r_get_states())
         self.assertEquals(count_npset, npset.call_count)
         self.assertEquals(count_unset + 1, unset_our_id.call_count)
 
-        r_state.r_set_states(states['weird'])
-        testee.config_changed()
+        r_state.r_set_states(states['all'])
+        self.assertRaises(sperror.StorPoolNoConfigException,
+                          testee.config_changed)
         self.assertEquals(states['none'], r_state.r_get_states())
         self.assertEquals(count_npset, npset.call_count)
         self.assertEquals(count_unset + 2, unset_our_id.call_count)
-
-        r_state.r_set_states(states['all'])
-        testee.config_changed()
-        self.assertEquals(states['none'], r_state.r_get_states())
-        self.assertEquals(count_npset, npset.call_count)
-        self.assertEquals(count_unset + 3, unset_our_id.call_count)
 
         # An empty string should feel the same.
         r_config.r_set('storpool_conf', '')
 
         r_state.r_set_states(states['none'])
-        testee.config_changed()
+        self.assertRaises(sperror.StorPoolNoConfigException,
+                          testee.config_changed)
+        self.assertEquals(states['none'], r_state.r_get_states())
+        self.assertEquals(count_npset, npset.call_count)
+        self.assertEquals(count_unset + 3, unset_our_id.call_count)
+
+        r_state.r_set_states(states['all'])
+        self.assertRaises(sperror.StorPoolNoConfigException,
+                          testee.config_changed)
         self.assertEquals(states['none'], r_state.r_get_states())
         self.assertEquals(count_npset, npset.call_count)
         self.assertEquals(count_unset + 4, unset_our_id.call_count)
-
-        r_state.r_set_states(states['weird'])
-        testee.config_changed()
-        self.assertEquals(states['none'], r_state.r_get_states())
-        self.assertEquals(count_npset, npset.call_count)
-        self.assertEquals(count_unset + 5, unset_our_id.call_count)
-
-        r_state.r_set_states(states['all'])
-        testee.config_changed()
-        self.assertEquals(states['none'], r_state.r_get_states())
-        self.assertEquals(count_npset, npset.call_count)
-        self.assertEquals(count_unset + 6, unset_our_id.call_count)
 
         # A real value for storpool_conf
         r_state.r_set_states(states['none'])
@@ -214,21 +192,14 @@ class TestStorPoolConfig(unittest.TestCase):
         testee.config_changed()
         self.assertEquals(states['got-config'], r_state.r_get_states())
         self.assertEquals(count_npset + 1, npset.call_count)
-        self.assertEquals(count_unset + 7, unset_our_id.call_count)
-
-        r_state.r_set_states(states['weird'])
-        r_config.r_set('storpool_conf', 'something')
-        testee.config_changed()
-        self.assertEquals(states['got-config'], r_state.r_get_states())
-        self.assertEquals(count_npset + 2, npset.call_count)
-        self.assertEquals(count_unset + 8, unset_our_id.call_count)
+        self.assertEquals(count_unset + 5, unset_our_id.call_count)
 
         r_state.r_set_states(states['all'])
         r_config.r_set('storpool_conf', 'something')
         testee.config_changed()
         self.assertEquals(states['got-config'], r_state.r_get_states())
-        self.assertEquals(count_npset + 3, npset.call_count)
-        self.assertEquals(count_unset + 9, unset_our_id.call_count)
+        self.assertEquals(count_npset + 2, npset.call_count)
+        self.assertEquals(count_unset + 6, unset_our_id.call_count)
 
     @mock_reactive_states
     @mock.patch('charmhelpers.core.hookenv.config', new=lambda: None)
@@ -260,7 +231,8 @@ class TestStorPoolConfig(unittest.TestCase):
         # Okay, now let's give it something to install... and fail.
         r_config.r_set('storpool_version', '0.1.0')
         install_packages.return_value = ('oops', [])
-        testee.install_package()
+        self.assertRaises(sperror.StorPoolPackageInstallException,
+                          testee.install_package)
         self.assertEquals(count_npset + 4, npset.call_count)
         self.assertEquals(count_install + 1, install_packages.call_count)
         self.assertEquals(count_record, record_packages.call_count)
@@ -272,7 +244,7 @@ class TestStorPoolConfig(unittest.TestCase):
         self.assertEquals(count_npset + 7, npset.call_count)
         self.assertEquals(count_install + 2, install_packages.call_count)
         self.assertEquals(count_record, record_packages.call_count)
-        self.assertEquals(set([INSTALLED_STATE]), r_state.r_get_states())
+        self.assertEquals(set(), r_state.r_get_states())
 
         # And now for the most common case, something to install...
         r_state.r_set_states(set())
@@ -281,7 +253,7 @@ class TestStorPoolConfig(unittest.TestCase):
         self.assertEquals(count_npset + 10, npset.call_count)
         self.assertEquals(count_install + 3, install_packages.call_count)
         self.assertEquals(count_record + 1, record_packages.call_count)
-        self.assertEquals(set([INSTALLED_STATE]), r_state.r_get_states())
+        self.assertEquals(set(), r_state.r_get_states())
 
     @mock_reactive_states
     @mock.patch('charmhelpers.core.hookenv.charm_dir')

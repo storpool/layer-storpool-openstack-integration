@@ -11,6 +11,7 @@ from charmhelpers.core import hookenv, templating
 
 from spcharms import config as spconfig
 from spcharms.confighelpers import network as spcnetwork
+from spcharms import error as sperror
 from spcharms import repo as sprepo
 from spcharms import states as spstates
 from spcharms import status as spstatus
@@ -18,14 +19,9 @@ from spcharms import txn
 from spcharms import utils as sputils
 
 STATES_REDO = {
-    'set': ['l-storpool-config.configure'],
+    'set': [],
     'unset': [
-        'l-storpool-config.configured',
-        'l-storpool-config.config-available',
-        'l-storpool-config.config-written',
         'l-storpool-config.config-network',
-        'l-storpool-config.package-try-install',
-        'l-storpool-config.package-installed',
     ],
 }
 
@@ -48,16 +44,11 @@ def register():
     })
 
 
-@reactive.when('storpool-helper.config-set')
-@reactive.when('l-storpool-config.configure')
-@reactive.when_not('l-storpool-config.configured')
-@reactive.when_not('l-storpool-config.stopped')
 def config_changed():
     """
     Check if the configuration is complete or has been changed.
     """
     rdebug('config-changed happened')
-    reactive.remove_state('l-storpool-config.configure')
     config = spconfig.m()
 
     # Remove any states that say we have accomplished anything...
@@ -69,11 +60,7 @@ def config_changed():
     rdebug('and we do{xnot} have a storpool_conf setting'
            .format(xnot=' not' if spconf is None else ''))
     if spconf is None or spconf == '':
-        return
-
-    # And let's make sure we try installing any packages we need...
-    reactive.set_state('l-storpool-config.config-available')
-    reactive.set_state('l-storpool-config.package-try-install')
+        raise sperror.StorPoolNoConfigException(['storpool_conf'])
 
     # This will probably race with some others, but oh well
     spstatus.npset('maintenance',
@@ -81,35 +68,6 @@ def config_changed():
                    'the StorPool repo setup')
 
 
-@reactive.when('storpool-repo-add.available')
-@reactive.when_not('l-storpool-config.config-available')
-@reactive.when_not('l-storpool-config.stopped')
-def not_ready_no_config():
-    """
-    Note that some configuration settings are missing.
-    """
-    rdebug('well, it seems we have a repo, but we do not have a config yet')
-    spstatus.npset('maintenance',
-                   'waiting for the StorPool charm configuration')
-
-
-@reactive.when_not('storpool-repo-add.available')
-@reactive.when('l-storpool-config.config-available')
-@reactive.when_not('l-storpool-config.stopped')
-def not_ready_no_repo():
-    """
-    Note that the `storpool-repo` layer has not yet completed its work.
-    """
-    rdebug('well, it seems we have a config, but we do not have a repo yet')
-    spstatus.npset('maintenance', 'waiting for the StorPool repo setup')
-
-
-@reactive.when('storpool-helper.config-set')
-@reactive.when('storpool-repo-add.available',
-               'l-storpool-config.config-available',
-               'l-storpool-config.package-try-install')
-@reactive.when_not('l-storpool-config.package-installed')
-@reactive.when_not('l-storpool-config.stopped')
 def install_package():
     """
     Install the base StorPool packages.
@@ -126,16 +84,14 @@ def install_package():
 
     spstatus.npset('maintenance',
                    'installing the StorPool configuration packages')
-    reactive.remove_state('l-storpool-config.package-try-install')
-    (err, newly_installed) = sprepo.install_packages({
+    packages = {
         'txn-install': '*',
         'storpool-config-' + spmajmin: spver,
-    })
+    }
+    (err, newly_installed) = sprepo.install_packages(packages)
     if err is not None:
-        rdebug('oof, we could not install packages: {err}'.format(err=err))
-        rdebug('removing the package-installed state')
-        reactive.remove_state('l-storpool-config.package-installed')
-        return
+        # FIXME: sprepo.install_packages() should do that
+        raise sperror.StorPoolPackageInstallException(packages.keys(), err)
 
     if newly_installed:
         rdebug('it seems we managed to install some packages: {names}'
@@ -144,16 +100,9 @@ def install_package():
     else:
         rdebug('it seems that all the packages were installed already')
 
-    rdebug('setting the package-installed state')
-    reactive.set_state('l-storpool-config.package-installed')
     spstatus.npset('maintenance', '')
 
 
-@reactive.when('storpool-helper.config-set')
-@reactive.when('l-storpool-config.config-available',
-               'l-storpool-config.package-installed')
-@reactive.when_not('l-storpool-config.config-written')
-@reactive.when_not('l-storpool-config.stopped')
 def write_out_config():
     """
     Write out the StorPool configuration file specified in the charm config.
@@ -187,13 +136,9 @@ def write_out_config():
                .format(len=len(cfg), oid=oid))
 
     rdebug('setting the config-written state')
-    reactive.set_state('l-storpool-config.config-written')
     spstatus.npset('maintenance', '')
 
 
-@reactive.when('l-storpool-config.config-written')
-@reactive.when_not('l-storpool-config.config-network')
-@reactive.when_not('l-storpool-config.stopped')
 def setup_interfaces():
     """
     Set up the IPv4 addresses of some interfaces if requested.
@@ -209,8 +154,7 @@ def setup_interfaces():
     cfg = spconfig.get_dict()
     ifaces = cfg.get('SP_IFACE', None)
     if ifaces is None:
-        hookenv.set('error', 'No SP_IFACES in the StorPool config')
-        return
+        raise sperror.StorPoolException('No SP_IFACES in the StorPool config')
     rdebug('got interfaces: {ifaces}'.format(ifaces=ifaces))
 
     spcnetwork.fixup_interfaces(ifaces)
@@ -218,6 +162,32 @@ def setup_interfaces():
     rdebug('well, looks like it is all done...')
     reactive.set_state('l-storpool-config.config-network')
     spstatus.npset('maintenance', '')
+
+
+@reactive.when('storpool-helper.config-set')
+@reactive.when('storpool-repo-add.available')
+@reactive.when_not('l-storpool-config.config-network')
+@reactive.when_not('l-storpool-config.stopped')
+def run():
+    try:
+        config_changed()
+        install_package()
+        write_out_config()
+        setup_interfaces()
+    except sperror.StorPoolNoConfigException as e_cfg:
+        hookenv.log('config: missing configuration: {m}'
+                    .format(m=', '.join(e_cfg.missing)),
+                    hookenv.INFO)
+    except sperror.StorPoolPackageInstallException as e_pkg:
+        hookenv.log('config: could not install the {names} packages: {e}'
+                    .format(names=' '.join(e_pkg.names), e=e_pkg.cause),
+                    hookenv.ERROR)
+    except sperror.StorPoolNoCGroupsException as e_cfg:
+        hookenv.log('config: unconfigured control groups: {m}'
+                    .format(m=', '.join(e_cfg.missing)),
+                    hookenv.ERROR)
+    except sperror.StorPoolException as e:
+        hookenv.log('config: StorPool installation problem: {e}'.format(e=e))
 
 
 @reactive.when('l-storpool-config.stop')

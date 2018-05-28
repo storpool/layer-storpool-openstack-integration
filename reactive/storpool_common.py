@@ -11,6 +11,7 @@ from charms import reactive
 from charmhelpers.core import hookenv, host, templating
 
 from spcharms import config as spconfig
+from spcharms import error as sperror
 from spcharms import repo as sprepo
 from spcharms import states as spstates
 from spcharms import status as spstatus
@@ -20,7 +21,6 @@ from spcharms import utils as sputils
 STATES_REDO = {
     'set': [],
     'unset': [
-        'storpool-common.package-installed',
         'storpool-common.config-written',
     ],
 }
@@ -43,24 +43,21 @@ def rdebug(s):
     sputils.rdebug(s, prefix='common')
 
 
-@reactive.when('storpool-helper.config-set')
-@reactive.when('storpool-repo-add.available')
-@reactive.when('l-storpool-config.package-installed')
-@reactive.when_not('storpool-common.package-installed')
-@reactive.when_not('storpool-common.stopped')
 def install_package():
     """
     Install the base StorPool packages.
+    May raise a StorPoolNoConfigException, a StorPoolPackageInstallException,
+    or a generic StorPoolException.
     """
     rdebug('the common repo has become available and '
            'we do have the configuration')
 
+    spe = sperror.StorPoolException
     rdebug('checking the kernel command line')
     with open('/proc/cmdline', mode='r') as f:
         ln = f.readline()
         if not ln:
-            sputils.err('Could not read a single line from /proc/cmdline')
-            return
+            raise spe('Could not read a single line from /proc/cmdline')
         words = ln.split()
 
         # OK, so this is a bit naive, but it will do the job
@@ -73,29 +70,27 @@ def install_package():
                             'DEVELOPMENT ONLY!  DO NOT run a StorPool cluster '
                             'in production with it!', hookenv.WARNING)
             else:
-                sputils.err('Missing kernel parameters: {missing}'
-                            .format(missing=' '.join(missing)))
-                return
+                raise spe('Missing kernel parameters: {missing}'
+                          .format(missing=' '.join(missing)))
 
     spstatus.npset('maintenance', 'obtaining the requested StorPool version')
     spver = spconfig.m().get('storpool_version', None)
     if spver is None or spver == '':
-        rdebug('no storpool_version key in the charm config yet')
-        return
+        raise sperror.StorPoolNoConfigException(['storpool_version'])
     spmajmin = '.'.join(spver.split('.')[0:2])
 
     spstatus.npset('maintenance', 'installing the StorPool common packages')
-    (err, newly_installed) = sprepo.install_packages({
+    packages = {
         'storpool-cli-' + spmajmin: spver,
         'storpool-common-' + spmajmin: spver,
         'storpool-etcfiles-' + spmajmin: spver,
         'kmod-storpool-' + spmajmin + '-' + os.uname().release: spver,
         'python-storpool-' + spmajmin: spver,
-    })
+    }
+    (err, newly_installed) = sprepo.install_packages(packages)
     if err is not None:
-        rdebug('oof, we could not install packages: {err}'.format(err=err))
-        rdebug('removing the package-installed state')
-        return
+        # FIXME: sprepo.install_packages() should do that
+        raise sperror.StorPoolPackageInstallException(packages.keys(), err)
 
     if newly_installed:
         rdebug('it seems we managed to install some packages: {names}'
@@ -121,8 +116,7 @@ def install_package():
         last_cpu = all_cpus[-1]
         all_cpus.extend([last_cpu, last_cpu, last_cpu])
     if len(all_cpus) < 4:
-        sputils.err('Not enough CPUs, need at least 4')
-        return
+        raise spe('Not enough CPUs, need at least 4')
     tdata = {
         'cpu_rdma': str(all_cpus[0]),
         'cpu_beacon': str(all_cpus[1]),
@@ -135,8 +129,7 @@ def install_package():
         while True:
             line = f.readline()
             if not line:
-                sputils.err('Could not find MemTotal in /proc/meminfo')
-                return
+                raise spe('Could not find MemTotal in /proc/meminfo')
             words = line.split()
             if words[0] == 'MemTotal:':
                 mem_total = int(words[1])
@@ -148,9 +141,8 @@ def install_package():
                 elif unit.startswith('G'):
                     mem_total = mem_total * 1024
                 else:
-                    sputils.err('Could not parse the "{u}" unit for '
-                                'MemTotal in /proc/meminfo'.format(u=words[2]))
-                    return
+                    raise spe('Could not parse the "{u}" unit for MemTotal ' +
+                              'in /proc/meminfo'.format(u=words[2]))
                 break
     mem_system = 4 * 1024
     mem_user = 4 * 1024
@@ -166,9 +158,8 @@ def install_package():
         mem_kernel = 1 * 512
     mem_reserved = mem_system + mem_user + mem_storpool + mem_kernel
     if mem_total <= mem_reserved:
-        sputils.err('Not enough memory, only have {total}M, need {mem}M'
-                    .format(mem=mem_reserved, total=mem_total))
-        return
+        raise spe('Not enough memory, only have {total}M, need {mem}M'
+                  .format(mem=mem_reserved, total=mem_total))
     mem_machine = mem_total - mem_reserved
     tdata.update({
         'mem_system': mem_system,
@@ -226,15 +217,9 @@ def install_package():
     except Exception:
         pass
 
-    rdebug('setting the package-installed state')
-    reactive.set_state('storpool-common.package-installed')
     spstatus.npset('maintenance', '')
 
 
-@reactive.when('l-storpool-config.config-written',
-               'storpool-common.package-installed')
-@reactive.when_not('storpool-common.config-written')
-@reactive.when_not('storpool-common.stopped')
 def copy_config_files():
     """
     Install some configuration files.
@@ -258,18 +243,33 @@ def copy_config_files():
     spstatus.npset('maintenance', '')
 
 
-@reactive.when('storpool-common.package-installed')
-@reactive.when_not('l-storpool-config.config-written')
+@reactive.when('storpool-helper.config-set')
+@reactive.when('storpool-repo-add.available')
+@reactive.when('l-storpool-config.config-network')
+@reactive.when_not('storpool-common.config-written')
 @reactive.when_not('storpool-common.stopped')
-def reinstall():
-    """
-    Trigger a reinstallation of the StorPool packages.
-    """
-    reactive.remove_state('storpool-common.package-installed')
+def run():
+    try:
+        install_package()
+        copy_config_files()
+    except sperror.StorPoolNoConfigException as e_cfg:
+        hookenv.log('common: missing configuration: {m}'
+                    .format(m=', '.join(e_cfg.missing)),
+                    hookenv.INFO)
+    except sperror.StorPoolPackageInstallException as e_pkg:
+        hookenv.log('common: could not install the {names} packages: {e}'
+                    .format(names=' '.join(e_pkg.names), e=e_pkg.cause),
+                    hookenv.ERROR)
+    except sperror.StorPoolNoCGroupsException as e_cfg:
+        hookenv.log('common: unconfigured control groups: {m}'
+                    .format(m=', '.join(e_cfg.missing)),
+                    hookenv.ERROR)
+    except sperror.StorPoolException as e:
+        hookenv.log('common: StorPool installation problem: {e}'.format(e=e))
 
 
 @reactive.when('storpool-common.config-written')
-@reactive.when_not('storpool-common.package-installed')
+@reactive.when_not('l-storpool-config.config-network')
 @reactive.when_not('storpool-common.stopped')
 def rewrite():
     """

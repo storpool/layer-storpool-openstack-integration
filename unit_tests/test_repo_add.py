@@ -17,6 +17,7 @@ if root_path not in sys.path:
     sys.path.insert(0, root_path)
 
 from spcharms import config as spconfig
+from spcharms import error as sperror
 from spcharms import utils as sputils
 
 
@@ -248,3 +249,17 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         testee.stop()
         self.assertFalse(os.path.exists(listfile))
         self.assertFalse(testee.has_apt_repo())
+
+    def test_error(self):
+        """
+        Test the package install exception.
+        """
+        names = ['storpool-beacon', 'storpool-block', 'txn']
+        cause = KeyError('weirdness')
+        e = sperror.StorPoolPackageInstallException(names, cause)
+        self.assertIsInstance(e, sperror.StorPoolPackageInstallException)
+        self.assertIsInstance(e, Exception)
+        self.assertEqual(e.names, names)
+        self.assertEqual(e.cause, cause)
+        self.assertRegex(str(e),
+                         '.*storpool-beacon storpool-block txn.*:.*weirdness')

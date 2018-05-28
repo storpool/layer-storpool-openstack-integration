@@ -7,9 +7,10 @@ from __future__ import print_function
 import os.path
 
 from charms import reactive
-from charmhelpers.core import host
+from charmhelpers.core import hookenv, host
 
 from spcharms import config as spconfig
+from spcharms import error as sperror
 from spcharms import repo as sprepo
 from spcharms import states as spstates
 from spcharms import status as spstatus
@@ -18,7 +19,6 @@ from spcharms import utils as sputils
 STATES_REDO = {
     'set': [],
     'unset': [
-        'storpool-block.package-installed',
         'storpool-block.block-started',
     ],
 }
@@ -31,38 +31,32 @@ def rdebug(s):
     sputils.rdebug(s, prefix='block')
 
 
-@reactive.when('storpool-helper.config-set')
-@reactive.when('storpool-repo-add.available')
-@reactive.when('storpool-common.config-written')
-@reactive.when_not('storpool-block.package-installed')
-@reactive.when_not('storpool-block.stopped')
 def install_package():
     """
     Install the StorPool block package.
+    May raise a StorPoolNoConfigException or a StorPoolPackageInstallException.
     """
     rdebug('the block repo has become available and the common packages '
            'have been configured')
 
     if sputils.check_in_lxc():
         rdebug('running in an LXC container, not doing anything more')
-        reactive.set_state('storpool-block.package-installed')
         return
 
     spstatus.npset('maintenance', 'obtaining the requested StorPool version')
     spver = spconfig.m().get('storpool_version', None)
     if spver is None or spver == '':
-        rdebug('no storpool_version key in the charm config yet')
-        return
+        raise sperror.StorPoolNoConfigException(['storpool_version'])
     spmajmin = '.'.join(spver.split('.')[0:2])
 
     spstatus.npset('maintenance', 'installing the StorPool block packages')
-    (err, newly_installed) = sprepo.install_packages({
+    packages = {
         'storpool-block-' + spmajmin: spver,
-    })
+    }
+    (err, newly_installed) = sprepo.install_packages(packages)
     if err is not None:
-        rdebug('oof, we could not install packages: {err}'.format(err=err))
-        rdebug('removing the package-installed state')
-        return
+        # FIXME: sprepo.install_packages() should do that
+        raise sperror.StorPoolPackageInstallException(packages.keys(), err)
 
     if newly_installed:
         rdebug('it seems we managed to install some packages: {names}'
@@ -71,18 +65,13 @@ def install_package():
     else:
         rdebug('it seems that all the packages were installed already')
 
-    rdebug('setting the package-installed state')
-    reactive.set_state('storpool-block.package-installed')
     spstatus.npset('maintenance', '')
 
 
-@reactive.when('storpool-block.package-installed')
-@reactive.when('storpool-beacon.beacon-started')
-@reactive.when_not('storpool-block.block-started')
-@reactive.when_not('storpool-block.stopped')
 def enable_and_start():
     """
     Start the `storpool_block` service.
+    May raise a StorPoolNoCGroupsException.
     """
     if sputils.check_in_lxc():
         rdebug('running in an LXC container, not doing anything more')
@@ -90,7 +79,8 @@ def enable_and_start():
         return
 
     if not sputils.check_cgroups('block'):
-        return
+        # FIXME: check_cgroups() should do that
+        raise sperror.StorPoolNoCGroupsException(['block'])
 
     rdebug('enabling and starting the block service')
     host.service_resume('storpool_block')
@@ -99,24 +89,41 @@ def enable_and_start():
     reactive.set_state('storpool-block.block-started')
 
 
-@reactive.when('storpool-block.block-started')
-@reactive.when_not('storpool-block.package-installed')
+@reactive.when('storpool-helper.config-set')
+@reactive.when('storpool-repo-add.available')
+@reactive.when('storpool-common.config-written')
+@reactive.when('storpool-beacon.beacon-started')
+@reactive.when_not('storpool-block.block-started')
 @reactive.when_not('storpool-block.stopped')
-def restart():
+def run():
     """
-    Trigger a restart of the `storpool_block` service.
+    Invoke install_package() and enable_and_start() as needed.
     """
-    reactive.remove_state('storpool-block.block-started')
+    try:
+        install_package()
+        enable_and_start()
+    except sperror.StorPoolNoConfigException as e_cfg:
+        hookenv.log('block: missing configuration: {m}'
+                    .format(m=', '.join(e_cfg.missing)),
+                    hookenv.INFO)
+    except sperror.StorPoolPackageInstallException as e_pkg:
+        hookenv.log('block: could not install the {names} packages: {e}'
+                    .format(names=' '.join(e_pkg.names), e=e_pkg.cause),
+                    hookenv.ERROR)
+    except sperror.StorPoolNoCGroupsException as e_cfg:
+        hookenv.log('block: unconfigured control groups: {m}'
+                    .format(m=', '.join(e_cfg.missing)),
+                    hookenv.ERROR)
 
 
-@reactive.when('storpool-block.package-installed')
+@reactive.when('storpool-block.block-started')
 @reactive.when_not('storpool-common.config-written')
 @reactive.when_not('storpool-block.stopped')
 def reinstall():
     """
     Trigger a reinstall and restart of the `storpool_block` service.
     """
-    reactive.remove_state('storpool-block.package-installed')
+    reactive.remove_state('storpool-block.block-started')
 
 
 @reactive.hook('install')
