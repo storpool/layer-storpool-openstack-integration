@@ -26,19 +26,19 @@ class StorPoolNoCGroupsException(Exception):
     """
     The StorPool control groups configuration is not properly done.
     """
-    def __init__(self, missing):
+    def __init__(self, msg):
         """
         Create a configuration exception with the specified missing
         control groups.
         """
-        self.missing = missing
+        self.msg = msg
 
     def __str__(self):
         """
-        Show the missing control groups.
+        Show the control group configuration problem.
         """
-        return 'The StorPool control groups are not properly set; ' + \
-               'missing items: {m}'.format(m=' '.join(self.missing))
+        return 'The StorPool control groups are not properly set: {m} ' \
+               .format(m=self.msg)
 
 
 class StorPoolPackageInstallException(Exception):

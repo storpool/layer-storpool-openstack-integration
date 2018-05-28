@@ -229,14 +229,18 @@ class TestStorPoolCommon(unittest.TestCase):
         # just hand the /proc/meminfo contents to everyone...
         bypassed.return_value = True
 
+        def raise_spe(_):
+            raise sperror.StorPoolPackageInstallException([], 'oops')
+
         # Fail to intall the packages
         r_config.r_set('storpool_version', '16.02', False)
         mock_file = mock.mock_open(read_data=COMBINED_LINE)
         with mock.patch('reactive.storpool_common.open', mock_file,
                         create=True):
-            install_packages.return_value = ('oops', [])
+            install_packages.side_effect = raise_spe
             self.assertRaises(sperror.StorPoolPackageInstallException,
                               testee.install_package)
+            install_packages.side_effect = None
             self.assertEquals(count_npset + 4, npset.call_count)
             self.assertEquals(count_log + 10, h_log.call_count)
             self.assertEquals(count_install + 1, install_packages.call_count)
@@ -254,7 +258,7 @@ class TestStorPoolCommon(unittest.TestCase):
             raise WeirdError('Because we said so!')
 
         # Installed the package correctly, `depmod -a` failed.
-        install_packages.return_value = (None, ['storpool-beacon'])
+        install_packages.return_value = ['storpool-beacon']
         mock_file = mock.mock_open(read_data=COMBINED_LINE)
         with mock.patch('reactive.storpool_common.open', mock_file,
                         create=True):

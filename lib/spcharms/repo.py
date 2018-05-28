@@ -10,6 +10,8 @@ import subprocess
 
 from charmhelpers.core import hookenv
 
+from spcharms import error as sperror
+
 
 class StorPoolRepoException(Exception):
     """
@@ -70,30 +72,27 @@ def pkgs_to_install(requested, policy):
     """
     to_install = []
 
+    spe = sperror.StorPoolPackageInstallException
     for p in policy:
         ver = policy[p]
         if ver is None:
-            return ('could not obtain APT policy information about '
-                    'the {pkg} package'.format(pkg=p),
-                    None)
+            raise spe(p, 'could not obtain APT policy information')
 
         req = requested[p]
         if ver['installed'] is not None and \
            (req == '*' or req == ver['installed']):
             continue
         elif ver['candidate'] is None:
-            return ('the {pkg} package is not available in the repositories, '
-                    'cannot proceed'.format(pkg=p),
-                    None)
+            raise spe(p, 'not available in the repositories')
         elif req != '*' and req != ver['candidate']:
-            return ('the {req} version of the {pkg} package is not available '
-                    'in the repositories, we have {cand} instead'
-                    .format(req=req, pkg=p, cand=ver['candidate']),
-                    None)
+            raise spe(p,
+                      'the {req} version is not available in '
+                      'the repositories, we have {cand} instead'
+                      .format(req=req, cand=ver['candidate']))
 
         to_install.append(p)
 
-    return (None, to_install)
+    return to_install
 
 
 def apt_install(pkgs):
@@ -147,23 +146,19 @@ def install_packages(requested):
     If any of the specified packages actually need to be installed, do that and
     return the list of installed ones (including dependencies).
     """
+    spe = sperror.StorPoolPackageInstallException
     try:
         policy = apt_pkg_policy(requested.keys())
     except Exception as e:
-        return ('Could not query the APT policy for "{names}": {err}'
-                .format(names=sorted(list(requested.keys())), err=e),
-                None)
+        raise spe(requested,
+                  'Could not query the APT policy: {err}'.format(err=e))
 
-    (err, to_install) = pkgs_to_install(requested, policy)
-    if err is not None:
-        return (err, None)
+    to_install = pkgs_to_install(requested, policy)
 
     try:
-        return (None, apt_install(to_install))
+        return apt_install(to_install)
     except Exception as e:
-        return ('Could not install the "{names}" packages: {e}'
-                .format(names=sorted(to_install), e=e),
-                None)
+        raise spe(requested, e)
 
 
 def charm_install_list_file():

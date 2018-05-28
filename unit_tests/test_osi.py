@@ -313,22 +313,26 @@ class TestStorPoolOpenStack(unittest.TestCase):
         self.assertEquals(count_record, record_packages.call_count)
         self.assertEquals(set(), r_state.r_get_states())
 
+        def raise_spe(_):
+            raise sperror.StorPoolPackageInstallException([], 'oops')
+
         # Okay, now let's give it something to install... and fail.
         r_state.r_set_states(set())
         r_config.r_clear_config()
         r_config.r_set('storpool_version', '0.1.0', False)
         r_config.r_set('storpool_openstack_version', '3.2.1', False)
         r_config.r_set('storpool_openstack_install', True, False)
-        install_packages.return_value = ('oops', [])
+        install_packages.side_effect = raise_spe
         self.assertRaises(sperror.StorPoolPackageInstallException,
                           testee.install_package)
+        install_packages.side_effect = None
         self.assertEquals(count_npset + 4, npset.call_count)
         self.assertEquals(count_install + 1, install_packages.call_count)
         self.assertEquals(count_record, record_packages.call_count)
         self.assertEquals(set(), r_state.r_get_states())
 
         # Right, now let's pretend that there was nothing to install
-        install_packages.return_value = (None, [])
+        install_packages.return_value = []
         testee.install_package()
         self.assertEquals(count_npset + 7, npset.call_count)
         self.assertEquals(count_install + 2, install_packages.call_count)
@@ -337,14 +341,10 @@ class TestStorPoolOpenStack(unittest.TestCase):
 
         # And now for the most common case, something to install...
         r_state.r_set_states(set())
-        install_packages.return_value = (
-            None,
-            ['storpool-openstack-integration']
-        )
+        install_packages.return_value = ['storpool-openstack-integration']
         testee.install_package()
         self.assertEquals(count_npset + 10, npset.call_count)
-        self.assertEquals(count_install + 3,
-                          install_packages.call_count)
+        self.assertEquals(count_install + 3, install_packages.call_count)
         self.assertEquals(count_record + 1, record_packages.call_count)
         self.assertEquals(set(), r_state.r_get_states())
 

@@ -9,6 +9,7 @@ import time
 from charmhelpers.core import hookenv, unitdata
 
 from spcharms import config as spconfig
+from spcharms import error as sperror
 from spcharms import kvdata
 from spcharms import status as spstatus
 
@@ -79,32 +80,29 @@ def check_cgroups(service):
         rdebug('- cgroups bypassed altogether')
         return True
 
+    spe = sperror.StorPoolNoCGroupsException
     cfg = spconfig.get_dict()
     use_cgroups = cfg.get('SP_USE_CGROUPS', '0').lower()
     if use_cgroups not in ('1', 'y', 'yes', 't', 'true'):
-        err('The SP_USE_CGROUPS setting is not enabled in '
-            'the StorPool configuration (bypass: use_cgroups)')
-        return False
+        raise spe('The SP_USE_CGROUPS setting is not enabled in '
+                  'the StorPool configuration (bypass: use_cgroups)')
     var = 'SP_{upper}_CGROUPS'.format(upper=service.upper())
     cgstr = cfg.get(var, None)
     if cgstr is None:
-        err('No {var} in the StorPool configuration'.format(var=var))
-        return False
+        raise spe('No {var} in the StorPool configuration'.format(var=var))
     rdebug('About to examine the "{cg}" string for valid cgroups'
            .format(cg=cgstr))
     for cgdef in filter(lambda s: s != '-g', cgstr.strip().split()):
         rdebug('- parsing {d}'.format(d=cgdef))
         comp = cgdef.split(':')
         if len(comp) != 2:
-            err('Unexpected component in {var}: {comp}'
-                .format(var=var, comp=cgdef))
-            return False
+            raise spe('Unexpected component in {var}: {comp}'
+                      .format(var=var, comp=cgdef))
         path = '/sys/fs/cgroup/{tp}/{p}'.format(tp=comp[0], p=comp[1])
         rdebug('  - checking for {path}'.format(path=path))
         if not os.path.isdir(path):
-            err('No {comp} group for the {svc}'
-                .format(comp=cgdef, svc=service))
-            return False
+            raise spe('No {comp} group for the {svc} service'
+                      .format(comp=cgdef, svc=service))
 
     rdebug('- the cgroups for {svc} are set up'.format(svc=service))
     return True

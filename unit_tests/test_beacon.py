@@ -161,11 +161,15 @@ class TestStorPoolBeacon(unittest.TestCase):
         self.assertEquals(count_record, record_packages.call_count)
         self.assertEquals(set(), r_state.r_get_states())
 
+        def raise_spe(_):
+            raise sperror.StorPoolPackageInstallException([], 'oops')
+
         # Okay, now let's give it something to install... and fail.
         r_config.r_set('storpool_version', '0.1.0', False)
-        install_packages.return_value = ('oops', [])
+        install_packages.side_effect = raise_spe
         self.assertRaises(sperror.StorPoolPackageInstallException,
                           testee.install_package)
+        install_packages.side_effect = None
         self.assertEquals(count_in_lxc + 3, check_in_lxc.call_count)
         self.assertEquals(count_npset + 3, npset.call_count)
         self.assertEquals(count_install + 1, install_packages.call_count)
@@ -173,7 +177,7 @@ class TestStorPoolBeacon(unittest.TestCase):
         self.assertEquals(set(), r_state.r_get_states())
 
         # Right, now let's pretend that there was nothing to install
-        install_packages.return_value = (None, [])
+        install_packages.return_value = []
         testee.install_package()
         self.assertEquals(count_in_lxc + 4, check_in_lxc.call_count)
         self.assertEquals(count_npset + 6, npset.call_count)
@@ -183,7 +187,7 @@ class TestStorPoolBeacon(unittest.TestCase):
 
         # And now for the most common case, something to install...
         r_state.r_set_states(set())
-        install_packages.return_value = (None, ['storpool-beacon'])
+        install_packages.return_value = ['storpool-beacon']
         testee.install_package()
         self.assertEquals(count_in_lxc + 5, check_in_lxc.call_count)
         self.assertEquals(count_npset + 9, npset.call_count)
@@ -212,12 +216,16 @@ class TestStorPoolBeacon(unittest.TestCase):
         self.assertEquals(count_cgroups, check_cgroups.call_count)
         self.assertEquals(set([STARTED_STATE]), r_state.r_get_states())
 
+        def raise_cge(_):
+            raise sperror.StorPoolNoCGroupsException('oops')
+
         # Now make sure it doesn't start if it can't find its control group.
         r_state.r_set_states(set())
         check_in_lxc.return_value = False
-        check_cgroups.return_value = False
+        check_cgroups.side_effect = raise_cge
         self.assertRaises(sperror.StorPoolNoCGroupsException,
                           testee.enable_and_start)
+        check_cgroups.side_effect = None
         self.assertEquals(count_in_lxc + 2, check_in_lxc.call_count)
         self.assertEquals(count_cgroups + 1, check_cgroups.call_count)
         self.assertEquals(set(), r_state.r_get_states())

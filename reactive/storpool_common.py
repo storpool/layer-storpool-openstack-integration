@@ -87,11 +87,7 @@ def install_package():
         'kmod-storpool-' + spmajmin + '-' + os.uname().release: spver,
         'python-storpool-' + spmajmin: spver,
     }
-    (err, newly_installed) = sprepo.install_packages(packages)
-    if err is not None:
-        # FIXME: sprepo.install_packages() should do that
-        raise sperror.StorPoolPackageInstallException(packages.keys(), err)
-
+    newly_installed = sprepo.install_packages(packages)
     if newly_installed:
         rdebug('it seems we managed to install some packages: {names}'
                .format(names=newly_installed))

@@ -49,11 +49,7 @@ def install_package():
     packages = {
         'storpool-beacon-' + spmajmin: spver,
     }
-    (err, newly_installed) = sprepo.install_packages(packages)
-    if err is not None:
-        # FIXME: sprepo.install_packages() should do that
-        raise sperror.StorPoolPackageInstallException(packages.keys(), err)
-
+    newly_installed = sprepo.install_packages(packages)
     if newly_installed:
         rdebug('it seems we managed to install some packages: {names}'
                .format(names=newly_installed))
@@ -74,9 +70,7 @@ def enable_and_start():
         reactive.set_state('storpool-beacon.beacon-started')
         return
 
-    if not sputils.check_cgroups('beacon'):
-        # FIXME: check_cgroups() should do that
-        raise sperror.StorPoolNoCGroupsException(['block'])
+    sputils.check_cgroups('beacon')
 
     rdebug('enabling and starting the beacon service')
     host.service_resume('storpool_beacon')
@@ -101,9 +95,7 @@ def run():
                     .format(names=' '.join(e_pkg.names), e=e_pkg.cause),
                     hookenv.ERROR)
     except sperror.StorPoolNoCGroupsException as e_cfg:
-        hookenv.log('beacon: unconfigured control groups: {m}'
-                    .format(m=', '.join(e_cfg.missing)),
-                    hookenv.ERROR)
+        hookenv.log('beacon: {e}'.format(e=e_cfg), hookenv.ERROR)
 
 
 @reactive.when('storpool-beacon.beacon-started')
