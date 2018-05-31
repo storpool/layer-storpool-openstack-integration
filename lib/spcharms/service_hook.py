@@ -4,134 +4,204 @@ the same charm so that the state may be reported to other charms.
 """
 import json
 
-from charms import reactive
-from charms.reactive import helpers
+from charmhelpers.core import hookenv
 
-from charmhelpers.core import hookenv, unitdata
-
-from spcharms import kvdata
+from spcharms import utils as sputils
 
 
-def init_state():
-    """
-    Initialize the local state as an empty dictionary.
-    """
-    return {'-local': {}}
+def rdebug(s):
+    sputils.rdebug(s, prefix='service')
 
 
-def get_state(db=None):
-    """
-    Fetch the cached state or, if none, initialize it anew.
-    """
-    if db is None:
-        db = unitdata.kv()
-    state = db.get(kvdata.KEY_PRESENCE, default=None)
-    if state is None:
-        state = init_state()
-        changed = True
-    else:
-        changed = False
-    return (state, changed)
+STORPOOL_PRESENCE_SCHEMA_1_0 = {
+    'format': {
+        'version': {
+            'major': int,
+            'minor': int,
+        },
+    },
+
+    'generation': int,
+
+    'nodes': {
+        '*': {
+            'generation': int,
+            'hostname': str,
+
+            # Only for storpool-block
+            '?id': str,
+
+            # Only for the storpool-block leader
+            '?config': {
+                'storpool_repo_url': str,
+                'storpool_version': str,
+                'storpool_openstack_version': str,
+                'storpool_conf': str,
+            },
+        },
+    },
+}
 
 
-def set_state(db, state):
-    """
-    Cache the current presence state in the unit's persistent storage.
-    """
-    db.set(kvdata.KEY_PRESENCE, state)
+class UnsupportedFormatError(Exception):
+    pass
 
 
-def update_state(db, state, changed, key, name, value):
-    """
-    Update the state of a single node in the database and, if it has indeed
-    been changed, store it into the persistent storage.
-    """
-    if key not in state:
-        state[key] = {}
-        changed = True
-    if state[key].get(name, '') != value:
-        state[key][name] = value
-        changed = True
+class ValidationError(Exception):
+    def __init__(self, key, err):
+        self.key = key
+        self.err = err
 
-    if changed:
-        set_state(db, state)
-    return changed
-
-
-def add_present_node(name, value, rel_name, rdebug=lambda s: s):
-    """
-    Update a peer's state and send the full structure right back if needed.
-    """
-    db = unitdata.kv()
-    (state, changed) = get_state(db)
-    changed = update_state(db, state, changed, '-local', name, value)
-    if changed:
-        rdebug('hm, let us then try to fetch the relation ids for {rel_name}'
-               .format(rel_name=rel_name))
-        rel_ids = hookenv.relation_ids(rel_name)
-        rdebug('rel_ids: {rel_ids}'.format(rel_ids=rel_ids))
-        for rel_id in rel_ids:
-            rdebug('- trying for {rel_id}'.format(rel_id=rel_id))
-            hookenv.relation_set(rel_id,
-                                 storpool_service=json.dumps(state['-local']))
-            rdebug('  - looks like we managed it for {rel_id}'
-                   .format(rel_id=rel_id))
-        rdebug('that is it for the rel_ids')
-
-
-def get_present_nodes():
-    """
-    Fetch the current state of the charm's units.
-    """
-    (state, _) = get_state()
-    res = {}
-    for arr in state.values():
-        for (key, value) in arr.items():
-            res[key] = value or res.get(key, False)
-    return res
-
-
-def handle(hk, attaching, data, rdebug=lambda s: s):
-    """
-    Handle a state change of the internal hook; update our state if needed.
-    """
-    rdebug('service_hook.handle for a {t} hook {name}, attaching {attaching}, '
-           'data keys {ks}'
-           .format(t=type(hk).__name__,
-                   name=hk.relation_name,
-                   attaching=attaching,
-                   ks=sorted(data.keys()) if data is not None else None))
-    db = unitdata.kv()
-    (state, changed) = get_state(db)
-    rdebug('- current state: {state}'.format(state=state))
-    rdebug('- changed even at the start: {changed}'.format(changed=changed))
-
-    key = hk.conversation().key
-    rdebug('- conversation key: {key}'.format(key=key))
-    if attaching:
-        rdebug('- attaching: adding new hosts as reported')
-        for (name, value) in data.items():
-            rdebug('  - processing name "{name}" value "{value}"'
-                   .format(name=name, value=value))
-            if update_state(db, state, changed, key, name, value):
-                changed = True
-            rdebug('    - changed: {changed}'.format(changed=changed))
-    else:
-        if key in state:
-            rdebug('- detaching: the conversation has been recorded, '
-                   'removing it')
-            del state[key]
-            changed = True
-            set_state(db, state)
+    def __str__(self):
+        if self.key is None:
+            return self.err
         else:
-            rdebug('- detaching, but we had no idea we were having '
-                   'this conversation, so nah')
+            return self.key + ': ' + self.err
 
-    if changed:
-        rdebug('- updated state: {state}'.format(state=state))
 
-    if changed or helpers.data_changed(kvdata.KEY_PRESENCE, state) or \
-       not helpers.is_state('storpool-service.changed'):
-        rdebug('- something changed, notifying whomever should care')
-        reactive.set_state('storpool-service.change')
-    return changed
+def validate_dict(value, schema):
+    if not isinstance(value, dict):
+        raise ValidationError(None,
+                              'not a dictionary, {t} instead'
+                              .format(t=type(value).__name__))
+
+    if len(schema.keys()) == 1 and '*' in schema:
+        v_schema = schema['*']
+        for key in value.keys():
+            try:
+                validate_dict(value[key], v_schema)
+            except ValidationError as e:
+                raise ValidationError(key, str(e))
+        return
+
+    extra = set(value.keys())
+    for key in schema.keys():
+        t = schema[key]
+        if key.startswith('?'):
+            required = False
+            key = key[1:]
+        else:
+            required = True
+
+        if key not in value:
+            if required:
+                raise ValidationError(key, 'missing')
+            else:
+                continue
+        v = value[key]
+        extra.remove(key)
+
+        if isinstance(t, type):
+            if not isinstance(v, t):
+                raise ValidationError(key,
+                                      'not a {t}, {vt} instead'
+                                      .format(t=t.__name__,
+                                              vt=type(v).__name__))
+        else:
+            assert(isinstance(t, dict))
+            try:
+                validate_dict(v, t)
+            except ValidationError as e:
+                raise ValidationError(key, str(e))
+
+    if extra:
+        raise ValidationError(None,
+                              'extra keys: {lst}'.format(lst=sorted(extra)))
+
+
+def validate_storpool_presence(value):
+    try:
+        version = value['format']['version']
+        v_major = version['major']
+        v_minor = int(version['minor'])
+    except Exception:
+        raise ValidationError(None, 'could not parse format/version')
+
+    if v_major < 1 or v_minor < 0 or v_major > 1:
+        raise UnsupportedFormatError()
+    else:
+        assert(v_major == 1)
+        # Eh, let's hope v_minor == 0 or we can ignore the new fields.
+        validate_dict(value, STORPOOL_PRESENCE_SCHEMA_1_0)
+        # No need to shuffle any fields around, this is the current format.
+        return value
+
+
+def presence_update(relname, data):
+    for name in (hookenv.relation_ids(relname) or []):
+        for unit in (hookenv.related_units(name) or []):
+            value = hookenv.relation_get('presence', rid=name, unit=unit)
+            if value is None:
+                continue
+            try:
+                value = json.loads(value)
+                value = validate_storpool_presence(value)
+            except UnsupportedFormatError:
+                hookenv.log('Unsupported presence format from node {u} on ' +
+                            'relation {name}'.format(u=unit, name=name),
+                            hookenv.ERROR)
+                continue
+            except ValidationError as e:
+                hookenv.log('Invalid presence data from node {u} on ' +
+                            'relation {name}: {e}'
+                            .format(u=unit, name=name, e=e),
+                            hookenv.ERROR)
+                continue
+            except Exception as e:
+                hookenv.log('Could not unserialize the presence data from ' +
+                            'unit {u} on relation {name}: {e}'
+                            .format(name=name, u=unit, e=e),
+                            hookenv.ERROR)
+                continue
+
+            # Anything newer than what we have?
+            if value['generation'] > data['generation']:
+                data['generation'] = value['generation']
+
+            for node in value['nodes']:
+                v = value['nodes'][node]
+                c_node = data['nodes'].get(node, {'generation': -1})
+                current = c_node['generation']
+                if current < v['generation']:
+                    data['nodes'][node] = v
+
+    return data
+
+
+def presence_send(relname, data):
+    for name in (hookenv.relation_ids(relname) or []):
+        try:
+            hookenv.relation_set(relation_id=name, relation_settings=data)
+        except Exception as e:
+            hookenv.log('Could not send the presence data out on ' +
+                        'the {name} relation: {e}'.format(name=name, e=e),
+                        hookenv.ERROR)
+
+
+def fetch_presence(relations):
+    data = {
+        'generation': -1,
+        'nodes': {},
+    }
+    for rel in relations:
+        data = presence_update(rel, data)
+    return data
+
+
+def send_presence(data, relations):
+    out = {
+        'presence': json.dumps({
+            'format': {
+                'version': {
+                    'major': 1,
+                    'minor': 0,
+                },
+            },
+
+            'generation': data['generation'],
+
+            'nodes': data['nodes'],
+        })
+    }
+    for rel in relations:
+        presence_send(rel, out)

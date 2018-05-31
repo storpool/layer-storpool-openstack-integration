@@ -1,5 +1,6 @@
 flake8
 os-testr
+ddt
 mock
 charmhelpers
 charms.reactive
