@@ -167,10 +167,10 @@ def stop():
             mods_b = subprocess.check_output(['lsmod'])
             for module_data in mods_b.decode().split('\n'):
                 module = module_data.split(' ', 1)[0]
-                rdebug('- got module {mod}'.format(mod=module))
-                if module.startswith('storpool_'):
-                    rdebug('  - trying to remove it')
-                    subprocess.call(['rmmod', module])
+                if not module.startswith('storpool_'):
+                    continue
+                rdebug('- trying to remove {mod}'.format(mod=module))
+                subprocess.call(['rmmod', module])
 
             # Any remaining? (not an error, just, well...)
             rdebug('checking for any remaining StorPool modules')
