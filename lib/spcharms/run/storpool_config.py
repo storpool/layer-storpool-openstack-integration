@@ -66,7 +66,7 @@ def install_package():
                    'installing the StorPool configuration packages')
     packages = {
         'txn-install': '*',
-        'storpool-config-' + spmajmin: spver,
+        'storpool-config-' + spmajmin: '*',
     }
     newly_installed = sprepo.install_packages(packages)
     if newly_installed:

@@ -77,8 +77,8 @@ def install_package():
 
     spstatus.npset('maintenance', 'installing the StorPool OpenStack packages')
     packages = {
-        'storpool-block-' + spmajmin: spver,
-        'python-storpool-spopenstack-' + spmajmin: spver,
+        'storpool-block-' + spmajmin: '*',
+        'python-storpool-spopenstack-' + spmajmin: '*',
         'storpool-openstack-integration': sposiver,
     }
     newly_installed = sprepo.install_packages(packages)

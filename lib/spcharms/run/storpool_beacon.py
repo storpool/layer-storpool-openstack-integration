@@ -40,7 +40,7 @@ def install_package():
 
     spstatus.npset('maintenance', 'installing the StorPool beacon packages')
     packages = {
-        'storpool-beacon-' + spmajmin: spver,
+        'storpool-beacon-' + spmajmin: '*',
     }
     newly_installed = sprepo.install_packages(packages)
     if newly_installed:

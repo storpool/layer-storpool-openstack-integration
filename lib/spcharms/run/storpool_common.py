@@ -74,11 +74,11 @@ def install_package():
 
     spstatus.npset('maintenance', 'installing the StorPool common packages')
     packages = {
-        'storpool-cli-' + spmajmin: spver,
-        'storpool-common-' + spmajmin: spver,
-        'storpool-etcfiles-' + spmajmin: spver,
-        'kmod-storpool-' + spmajmin + '-' + os.uname().release: spver,
-        'python-storpool-' + spmajmin: spver,
+        'storpool-cli-' + spmajmin: '*',
+        'storpool-common-' + spmajmin: '*',
+        'storpool-etcfiles-' + spmajmin: '*',
+        'kmod-storpool-' + spmajmin + '-' + os.uname().release: '*',
+        'python-storpool-' + spmajmin: '*',
     }
     newly_installed = sprepo.install_packages(packages)
     if newly_installed:

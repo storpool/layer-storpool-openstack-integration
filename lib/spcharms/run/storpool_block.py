@@ -44,7 +44,7 @@ def install_package():
 
     spstatus.npset('maintenance', 'installing the StorPool block packages')
     packages = {
-        'storpool-block-' + spmajmin: spver,
+        'storpool-block-' + spmajmin: '*',
     }
     newly_installed = sprepo.install_packages(packages)
     if newly_installed:
