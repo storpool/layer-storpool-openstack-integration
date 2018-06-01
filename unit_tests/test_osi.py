@@ -84,6 +84,8 @@ comp_tester = None
 
 
 def exec_with_output(cmd):
+    if cmd[0] == 'env' and cmd[1].startswith('PATH='):
+        cmd = cmd[2:]
     if cmd[0:3] == ['sp-openstack', '--', 'detect']:
         comp_tester.assertEqual(4, len(cmd))
         if cmd[3] in comp['all']:

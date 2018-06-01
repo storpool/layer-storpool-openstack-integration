@@ -111,8 +111,9 @@ def enable_and_start():
     spe = sperror.StorPoolException
     nova_found = False
     rdebug('- trying to detect OpenStack components')
+    safe_path = ['env', 'PATH=/usr/sbin:/usr/bin:/sbin:/bin']
     for comp in openstack_components:
-        res = sputils.exec(['sp-openstack', '--', 'detect', comp])
+        res = sputils.exec(safe_path + ['sp-openstack', '--', 'detect', comp])
         if res['res'] != 0:
             rdebug('    - {comp} not found'.format(comp=comp))
             continue
@@ -122,7 +123,7 @@ def enable_and_start():
             nova_found = True
             rdebug('     - found Nova on bare metal, will try to restart it')
 
-        res = sputils.exec(['sp-openstack', '--', 'check', comp])
+        res = sputils.exec(safe_path + ['sp-openstack', '--', 'check', comp])
         if res['res'] == 0:
             rdebug('    - {comp} integration already there'
                    .format(comp=comp))
@@ -130,7 +131,8 @@ def enable_and_start():
             rdebug('    - {comp} MISSING integration'.format(comp=comp))
             rdebug('    - running sp-openstack install {comp}'
                    .format(comp=comp))
-            res = sputils.exec(['sp-openstack', '-T',
+            res = sputils.exec(safe_path +
+                               ['sp-openstack', '-T',
                                 txn.module_name(), '--', 'install',
                                 comp])
             if res['res'] != 0:
