@@ -93,6 +93,15 @@ def install_package():
     spstatus.npset('maintenance', 'updating the kernel module dependencies')
     subprocess.check_call(['depmod', '-a'])
 
+    if not sputils.check_in_lxc():
+        configure_cgroups()
+
+
+def configure_cgroups():
+    """
+    Create the /etc/cgconfig.d/*.slice control group configuration.
+    """
+    spe = sperror.StorPoolException
     rdebug('gathering swap usage information for the cgroup configuration')
     re_number = re.compile('(?: 0 | [1-9][0-9]* )$', re.X)
     total_swap = 0
