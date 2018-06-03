@@ -6,6 +6,7 @@ import subprocess
 from charms import reactive
 from charmhelpers.core import hookenv, unitdata
 
+from spcharms import error
 from spcharms import kvdata
 
 cached_config = None
@@ -118,7 +119,7 @@ def m():
     if cached_meta is None:
         mm = unitdata.kv().get(kvdata.KEY_META_CONFIG, None)
         if mm is None:
-            raise Exception('spcharms.config.m() invoked too early!')
+            raise error.StorPoolNoConfigException(['*'])
         elif mm == 'None':
             cached_meta = mm
         else:
