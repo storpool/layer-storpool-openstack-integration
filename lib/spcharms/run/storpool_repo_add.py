@@ -177,6 +177,7 @@ def install_apt_repo():
                                      suffix='.list',
                                      delete=False) as tempf:
         print(text, file=tempf, end='', flush=True)
+        os.chmod(tempf.name, 0o644)
         os.rename(tempf.name, filename)
 
 
