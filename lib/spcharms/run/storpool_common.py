@@ -73,7 +73,6 @@ def install_package():
         raise sperror.StorPoolNoConfigException(['storpool_version'])
     spmajmin = '.'.join(spver.split('.')[0:2])
 
-    spstatus.npset('maintenance', 'installing the StorPool common packages')
     packages = {
         'storpool-cli-' + spmajmin: '*',
         'storpool-common-' + spmajmin: '*',
@@ -81,6 +80,43 @@ def install_package():
         'kmod-storpool-' + spmajmin + '-' + os.uname().release: '*',
         'python-storpool-' + spmajmin: '*',
     }
+
+    spstatus.npset('maintenance', 'querying the installed StorPool packages')
+    for pattern in ('storpool-*', 'kmod-storpool-*', 'python-storpool-*'):
+        try:
+            rdebug('obtaining information about the {pat} packages'
+                   .format(pat=pattern),
+                   cond='run-common')
+            raw = subprocess.check_output([
+                'dpkg-query', '-W', '--showformat', '${Package}\t${Status}\n',
+                pattern])
+            lines = raw.decode().split('\n')
+            rdebug('got {count} raw lines'.format(count=len(lines)),
+                   cond='run-common')
+
+            for line in lines:
+                if line == '':
+                    continue
+                fields = line.split('\t')
+                if len(fields) != 2:
+                    rdebug('- weird line with {count} fields: {line}'
+                           .format(count=len(fields), line=line))
+                    continue
+                (pkg, status) = fields
+                rdebug('- package {pkg} status {st}'
+                       .format(pkg=pkg, st=status),
+                       cond='run-common')
+                if status == 'install ok installed' and pkg not in packages:
+                    rdebug('  - adding it', cond='run-common')
+                    packages[pkg] = '*'
+        except Exception as e:
+            rdebug('could not query the {pat} packages: {e}'
+                   .format(pat=pattern, e=e))
+
+    rdebug('{count} packages to install/upgrade'
+           .format(count=len(packages.keys())))
+
+    spstatus.npset('maintenance', 'installing the StorPool common packages')
     newly_installed = sprepo.install_packages(packages)
     if newly_installed:
         rdebug('it seems we managed to install some packages: {names}'

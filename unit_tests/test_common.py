@@ -123,9 +123,11 @@ class TestStorPoolCommon(unittest.TestCase):
     @mock.patch('os.path.isdir')
     @mock.patch('os.walk')
     @mock.patch('os.stat')
+    @mock.patch('subprocess.check_output')
     @mock.patch('subprocess.check_call')
     @mock.patch('charmhelpers.core.hookenv.log')
-    def test_install_package(self, h_log, check_call, os_stat, os_walk, isdir,
+    def test_install_package(self, h_log, check_call, check_output,
+                             os_stat, os_walk, isdir,
                              render, npset, install_packages, record_packages,
                              txn_install, bypassed):
         """
@@ -207,8 +209,8 @@ class TestStorPoolCommon(unittest.TestCase):
             self.assertRaises(sperror.StorPoolPackageInstallException,
                               testee.install_package)
             install_packages.side_effect = None
-            self.assertEquals(count_npset + 4, npset.call_count)
-            self.assertEquals(count_log + 10, h_log.call_count)
+            self.assertEquals(count_npset + 5, npset.call_count)
+            self.assertEquals(count_log + 11, h_log.call_count)
             self.assertEquals(count_install + 1, install_packages.call_count)
             self.assertEquals(count_record, record_packages.call_count)
             self.assertEquals(count_call, check_call.call_count)
@@ -229,8 +231,8 @@ class TestStorPoolCommon(unittest.TestCase):
                         create=True):
             check_call.side_effect = raise_notimp
             self.assertRaises(WeirdError, testee.install_package)
-            self.assertEquals(count_npset + 7, npset.call_count)
-            self.assertEquals(count_log + 15, h_log.call_count)
+            self.assertEquals(count_npset + 9, npset.call_count)
+            self.assertEquals(count_log + 17, h_log.call_count)
             self.assertEquals(count_install + 2,
                               install_packages.call_count)
             self.assertEquals(count_record + 1,
@@ -258,8 +260,8 @@ class TestStorPoolCommon(unittest.TestCase):
         with mock.patch('spcharms.run.storpool_common.open', mock_file,
                         create=True):
             testee.install_package()
-            self.assertEquals(count_npset + 11, npset.call_count)
-            self.assertEquals(count_log + 33, h_log.call_count)
+            self.assertEquals(count_npset + 14, npset.call_count)
+            self.assertEquals(count_log + 36, h_log.call_count)
             self.assertEquals(count_install + 3,
                               install_packages.call_count)
             self.assertEquals(count_record + 2,
