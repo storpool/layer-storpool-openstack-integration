@@ -125,8 +125,9 @@ class TestStorPoolCommon(unittest.TestCase):
     @mock.patch('os.stat')
     @mock.patch('subprocess.check_output')
     @mock.patch('subprocess.check_call')
+    @mock.patch('subprocess.call')
     @mock.patch('charmhelpers.core.hookenv.log')
-    def test_install_package(self, h_log, check_call, check_output,
+    def test_install_package(self, h_log, call, check_call, check_output,
                              os_stat, os_walk, isdir,
                              render, npset, install_packages, record_packages,
                              txn_install, bypassed):
@@ -232,7 +233,7 @@ class TestStorPoolCommon(unittest.TestCase):
             check_call.side_effect = raise_notimp
             self.assertRaises(WeirdError, testee.install_package)
             self.assertEquals(count_npset + 9, npset.call_count)
-            self.assertEquals(count_log + 17, h_log.call_count)
+            self.assertEquals(count_log + 19, h_log.call_count)
             self.assertEquals(count_install + 2,
                               install_packages.call_count)
             self.assertEquals(count_record + 1,
@@ -261,7 +262,7 @@ class TestStorPoolCommon(unittest.TestCase):
                         create=True):
             testee.install_package()
             self.assertEquals(count_npset + 14, npset.call_count)
-            self.assertEquals(count_log + 36, h_log.call_count)
+            self.assertEquals(count_log + 40, h_log.call_count)
             self.assertEquals(count_install + 3,
                               install_packages.call_count)
             self.assertEquals(count_record + 2,

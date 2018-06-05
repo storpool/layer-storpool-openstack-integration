@@ -96,12 +96,13 @@ class TestStorPoolBeacon(unittest.TestCase):
 
     @mock_reactive_states
     @mock.patch('charmhelpers.core.hookenv.config', new=lambda: r_config)
+    @mock.patch('subprocess.call')
     @mock.patch('spcharms.repo.record_packages')
     @mock.patch('spcharms.repo.install_packages')
     @mock.patch('spcharms.status.npset')
     @mock.patch('spcharms.utils.check_in_lxc')
     def test_install_package(self, check_in_lxc, npset,
-                             install_packages, record_packages):
+                             install_packages, record_packages, subcall):
         """
         Test that the layer attempts to install packages correctly.
         """
