@@ -173,11 +173,11 @@ def install_packages(requested):
                   'Could not query the APT policy: {err}'.format(err=e))
 
     to_install = pkgs_to_install(requested, policy)
-
-    try:
-        return apt_install(to_install)
-    except Exception as e:
-        raise spe(requested.keys(), e)
+    if to_install:
+        try:
+            return apt_install(to_install)
+        except Exception as e:
+            raise spe(requested.keys(), e)
 
 
 def charm_install_list_file():
