@@ -11,6 +11,7 @@ import subprocess
 from charmhelpers.core import hookenv
 
 from spcharms import error as sperror
+from spcharms import utils as sputils
 
 
 class StorPoolRepoException(Exception):
@@ -26,6 +27,10 @@ re_policy = {
     'candidate': re.compile('\s* Candidate: \s+ (?P<version> \S+ ) \s* $',
                             re.X),
 }
+
+
+def rdebug(s, cond=None):
+    sputils.rdebug(s, prefix='repo', cond=cond)
 
 
 def apt_pkg_policy(names):
@@ -72,6 +77,7 @@ def pkgs_to_install(requested, policy):
     """
     to_install = []
 
+    rdebug('Determining which packages to install/upgrade', cond='repo-which')
     spe = sperror.StorPoolPackageInstallException
     for p in policy:
         ver = policy[p]
@@ -79,8 +85,14 @@ def pkgs_to_install(requested, policy):
             raise spe([p], 'could not obtain APT policy information')
 
         req = requested[p]
+        rdebug('- {p}: requested {req} installed {inst} candidate {cand}'
+               .format(p=p, req=req,
+                       inst=ver['installed'], cand=ver['candidate']),
+               cond='repo-which')
         if ver['installed'] is not None and \
            (req == '*' or req == ver['installed']):
+            rdebug('  - already installed, no changes needed (wrong!)',
+                   cond='repo-which')
             continue
         elif ver['candidate'] is None:
             raise spe([p], 'not available in the repositories')
@@ -90,8 +102,12 @@ def pkgs_to_install(requested, policy):
                       'the repositories, we have {cand} instead'
                       .format(req=req, cand=ver['candidate']))
 
+        rdebug('  - apparently we need to install or upgrade it',
+               cond='repo-which')
         to_install.append(p)
 
+    rdebug('We need to install/upgrade {ln} packages: {lst}'
+           .format(ln=len(to_install), lst=' '.join(sorted(to_install))))
     return to_install
 
 
