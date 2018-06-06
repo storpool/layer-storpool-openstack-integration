@@ -89,13 +89,16 @@ def pkgs_to_install(requested, policy):
                .format(p=p, req=req,
                        inst=ver['installed'], cand=ver['candidate']),
                cond='repo-which')
-        if ver['installed'] is not None and \
-           (req == '*' or req == ver['installed']):
-            rdebug('  - already installed, no changes needed (wrong!)',
+        if ver['installed'] is not None and req == ver['installed']:
+            rdebug('  - exact version requested, already installed',
                    cond='repo-which')
             continue
         elif ver['candidate'] is None:
             raise spe([p], 'not available in the repositories')
+        elif req == '*' and ver['candidate'] == ver['installed']:
+            rdebug('  - best candidate already installed',
+                   cond='repo-which')
+            continue
         elif req != '*' and req != ver['candidate']:
             raise spe([p],
                       'the {req} version is not available in '
