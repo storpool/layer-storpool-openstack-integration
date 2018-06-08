@@ -54,6 +54,14 @@ class QuasiConfig(object):
         raise AttributeError('Cannot override the QuasiConfig '
                              '"{name}" attribute'.format(name=name))
 
+    def get_dict(self):
+        d = dict(self.config)
+        d.update(self.override)
+        return d
+
+    def __str__(self):
+        return str(self.get_dict())
+
 
 def get_cached_dict():
     """
