@@ -159,3 +159,13 @@ def set_meta_config(data):
     cached_meta = None
     m()
     reactive.set_state('storpool-helper.config-set')
+
+
+def unset_meta_config():
+    """
+    Forget any cached configuration data.
+    """
+    unitdata.kv().unset(kvdata.KEY_META_CONFIG)
+    global cached_meta
+    cached_meta = None
+    reactive.remove_state('storpool-helper.config-set')
