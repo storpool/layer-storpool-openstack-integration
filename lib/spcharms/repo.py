@@ -76,16 +76,16 @@ def pkgs_to_install(requested, policy):
     for p in policy:
         ver = policy[p]
         if ver is None:
-            raise spe(p, 'could not obtain APT policy information')
+            raise spe([p], 'could not obtain APT policy information')
 
         req = requested[p]
         if ver['installed'] is not None and \
            (req == '*' or req == ver['installed']):
             continue
         elif ver['candidate'] is None:
-            raise spe(p, 'not available in the repositories')
+            raise spe([p], 'not available in the repositories')
         elif req != '*' and req != ver['candidate']:
-            raise spe(p,
+            raise spe([p],
                       'the {req} version is not available in '
                       'the repositories, we have {cand} instead'
                       .format(req=req, cand=ver['candidate']))
@@ -150,7 +150,7 @@ def install_packages(requested):
     try:
         policy = apt_pkg_policy(requested.keys())
     except Exception as e:
-        raise spe(requested,
+        raise spe(requested.keys(),
                   'Could not query the APT policy: {err}'.format(err=e))
 
     to_install = pkgs_to_install(requested, policy)
@@ -158,7 +158,7 @@ def install_packages(requested):
     try:
         return apt_install(to_install)
     except Exception as e:
-        raise spe(requested, e)
+        raise spe(requested.keys(), e)
 
 
 def charm_install_list_file():
