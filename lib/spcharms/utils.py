@@ -16,11 +16,16 @@ from spcharms import status as spstatus
 rdebug_node = platform.node()
 
 
-def rdebug(s, prefix='storpool'):
+def rdebug(s, prefix='storpool', cond=None):
     """
     Log a diagnostic message through the charms model logger and also,
     if explicitly requested in the charm configuration, to a local file.
     """
+    if cond is not None:
+        cfg = hookenv.config().get('storpool_debug')
+        if cfg is None or cfg != 'ALL' and cond not in cfg.split(','):
+            return
+
     global rdebug_node
     data = '[[{hostname}:{prefix}]] {s}'.format(hostname=rdebug_node,
                                                 prefix=prefix,

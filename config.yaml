@@ -15,6 +15,10 @@ options:
     type: string
     description: The contents of the /etc/storpool.conf file.
     default:
+  storpool_debug:
+    type: string
+    description: An optional comma-separated list of debug tags or 'ALL'
+    default:
   storpool_openstack_version:
     type: string
     description: The version of the StorPool OpenStack integration Ubuntu packages to install.
