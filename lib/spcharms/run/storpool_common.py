@@ -29,11 +29,11 @@ KERNEL_REQUIRED_PARAMS = (
 )
 
 
-def rdebug(s):
+def rdebug(s, cond=None):
     """
     Pass the diagnostic message string `s` to the central diagnostic logger.
     """
-    sputils.rdebug(s, prefix='common')
+    sputils.rdebug(s, prefix='common', cond=cond)
 
 
 def install_package():
@@ -180,7 +180,8 @@ def install_package():
                                                  mode='w+t',
                                                  delete=True) as tempf:
                     rdebug('- generating {tempf} for {dst}'
-                           .format(dst=dst, tempf=tempf.name))
+                           .format(dst=dst, tempf=tempf.name),
+                           cond='run-common')
                     templating.render(
                                       source=fname,
                                       target=tempf.name,

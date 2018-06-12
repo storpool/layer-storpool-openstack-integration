@@ -19,11 +19,11 @@ from spcharms import utils as sputils
 from spcharms.run import storpool_repo_add as run_repo
 
 
-def rdebug(s):
+def rdebug(s, cond=None):
     """
     Pass the diagnostic message string `s` to the central diagnostic logger.
     """
-    sputils.rdebug(s, prefix='config')
+    sputils.rdebug(s, prefix='config', cond=cond)
 
 
 def config_changed():
@@ -89,7 +89,8 @@ def write_out_config():
                                      mode='w+t',
                                      delete=True) as spconf:
         rdebug('about to write the contents to the temporary file {sp}'
-               .format(sp=spconf.name))
+               .format(sp=spconf.name),
+               cond='run-config')
         templating.render(source='storpool.conf',
                           target=spconf.name,
                           owner='root',
@@ -98,12 +99,13 @@ def write_out_config():
                            'storpool_conf': spconfig.m()['storpool_conf'],
                           },
                           )
-        rdebug('about to invoke txn install')
+        rdebug('about to invoke txn install', cond='run-config')
         txn.install('-o', 'root', '-g', 'root', '-m', '644', '--',
                     spconf.name, '/etc/storpool.conf')
-        rdebug('it seems that /etc/storpool.conf has been created')
+        rdebug('it seems that /etc/storpool.conf has been created',
+               cond='run-config')
 
-        rdebug('trying to read it now')
+        rdebug('trying to read it now', cond='run-config')
         spconfig.drop_cache()
         cfg = spconfig.get_dict()
         oid = cfg['SP_OURID']
@@ -111,7 +113,6 @@ def write_out_config():
         rdebug('got {len} keys in the StorPool config, our id is {oid}'
                .format(len=len(cfg), oid=oid))
 
-    rdebug('setting the config-written state')
     spstatus.npset('maintenance', '')
 
 

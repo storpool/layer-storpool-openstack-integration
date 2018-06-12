@@ -147,7 +147,7 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         found = filter(lambda s: s.startswith(keydata), lines)
         self.assertTrue(found)
 
-    @mock.patch('charmhelpers.core.hookenv.config', new=lambda: None)
+    @mock.patch('charmhelpers.core.hookenv.config', new=lambda: {})
     @mock.patch('charmhelpers.core.hookenv.charm_dir')
     def test_apt_key(self, charm_dir):
         """
@@ -224,7 +224,7 @@ class TestStorPoolRepoAdd(unittest.TestCase):
                 os.rename(tempf.name, listfile)
                 return modify
 
-    @mock.patch('charmhelpers.core.hookenv.config', new=lambda: None)
+    @mock.patch('charmhelpers.core.hookenv.config', new=lambda: {})
     def test_sources_list(self):
         """
         Test the routines that let APT look at the StorPool repository.

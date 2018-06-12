@@ -96,20 +96,21 @@ def check_cgroups(service):
     if cgstr is None:
         raise spe('No {var} in the StorPool configuration'.format(var=var))
     rdebug('About to examine the "{cg}" string for valid cgroups'
-           .format(cg=cgstr))
+           .format(cg=cgstr), cond='cgroup')
     for cgdef in filter(lambda s: s != '-g', cgstr.strip().split()):
-        rdebug('- parsing {d}'.format(d=cgdef))
+        rdebug('- parsing {d}'.format(d=cgdef), cond='cgroup')
         comp = cgdef.split(':')
         if len(comp) != 2:
             raise spe('Unexpected component in {var}: {comp}'
                       .format(var=var, comp=cgdef))
         path = '/sys/fs/cgroup/{tp}/{p}'.format(tp=comp[0], p=comp[1])
-        rdebug('  - checking for {path}'.format(path=path))
+        rdebug('  - checking for {path}'.format(path=path), cond='cgroup')
         if not os.path.isdir(path):
             raise spe('No {comp} group for the {svc} service'
                       .format(comp=cgdef, svc=service))
 
-    rdebug('- the cgroups for {svc} are set up'.format(svc=service))
+    rdebug('- the cgroups for {svc} are set up'.format(svc=service),
+           cond='cgroup')
     return True
 
 

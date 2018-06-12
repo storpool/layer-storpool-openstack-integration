@@ -21,11 +21,11 @@ nonvlandef = [
 ]
 
 
-def rdebug(s):
+def rdebug(s, cond=None):
     """
     Pass the diagnostic message string `s` to the central diagnostic logger.
     """
-    sputils.rdebug(s, prefix='config')
+    sputils.rdebug(s, prefix='config', cond=cond)
 
 
 def fixup_interfaces_file(fname, data, handled):
@@ -40,7 +40,8 @@ def fixup_interfaces_file(fname, data, handled):
     """
     if fname in handled:
         return
-    rdebug('Trying to add interface data to {fname}'.format(fname=fname))
+    rdebug('Trying to add interface data to {fname}'.format(fname=fname),
+           cond='fixup-ifaces')
     handled.add(fname)
 
     def is_new_stanza(s):
@@ -106,9 +107,11 @@ def fixup_interfaces_file(fname, data, handled):
                 tempf.flush()
                 txn.install(tempf.name, fname, exact=True)
             else:
-                rdebug('No need to update {fname}'.format(fname=fname))
+                rdebug('No need to update {fname}'.format(fname=fname),
+                       cond='fixup-ifaces')
 
-    rdebug('Done adding interface data to {fname}'.format(fname=fname))
+    rdebug('Done adding interface data to {fname}'.format(fname=fname),
+           cond='fixup-ifaces')
 
 
 def fixup_interfaces(ifaces):
@@ -116,7 +119,8 @@ def fixup_interfaces(ifaces):
     Modify the system network configuration to add the post-up commands to
     the StorPool interfaces.
     """
-    rdebug('fixup_interfaces invoked for {ifaces}'.format(ifaces=ifaces))
+    rdebug('fixup_interfaces invoked for {ifaces}'.format(ifaces=ifaces),
+           cond='fixup-ifaces')
 
     # Parse the interface names
     data = {}
@@ -155,7 +159,9 @@ def fixup_interfaces(ifaces):
             }
             data[iface] = list(map(lambda s: s.format(**subst), nonvlandef))
 
-    rdebug('Gone through the interfaces, got data: {data}'.format(data=data))
+    rdebug('Gone through the interfaces, got data: {data}'.format(data=data),
+           cond='fixup-ifaces')
 
-    rdebug('Now about to go through the system network configuration...')
+    rdebug('Now about to go through the system network configuration...',
+           cond='fixup-ifaces')
     fixup_interfaces_file('/etc/network/interfaces', data, set())

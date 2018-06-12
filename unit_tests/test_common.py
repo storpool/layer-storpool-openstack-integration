@@ -259,7 +259,7 @@ class TestStorPoolCommon(unittest.TestCase):
                         create=True):
             testee.install_package()
             self.assertEquals(count_npset + 11, npset.call_count)
-            self.assertEquals(count_log + 33, h_log.call_count)
+            self.assertEquals(count_log + 31, h_log.call_count)
             self.assertEquals(count_install + 3,
                               install_packages.call_count)
             self.assertEquals(count_record + 2,

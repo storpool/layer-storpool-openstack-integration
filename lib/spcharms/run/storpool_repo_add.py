@@ -55,11 +55,11 @@ def repo_url():
     return spconfig.m()['storpool_repo_url']
 
 
-def rdebug(s):
+def rdebug(s, cond=None):
     """
     Pass the diagnostic message string `s` to the central diagnostic logger.
     """
-    sputils.rdebug(s, prefix='repo-add')
+    sputils.rdebug(s, prefix='repo-add', cond=cond)
 
 
 def apt_file_contents(url):
@@ -76,7 +76,7 @@ def has_apt_key():
     """
     Check whether the local APT installation has the StorPool signing key.
     """
-    rdebug('has_apt_key() invoked')
+    rdebug('has_apt_key() invoked', cond='repo-add')
     current = subprocess.check_output([
                                        'apt-key',
                                        'adv',
@@ -115,15 +115,17 @@ def install_apt_key():
     """
     Add the StorPool package signing key to the local APT setup.
     """
-    rdebug('install_apt_key() invoked')
+    rdebug('install_apt_key() invoked', cond='repo-add')
     keyfile = '{charm}/templates/{fname}'.format(charm=hookenv.charm_dir(),
                                                  fname='storpool-maas.key')
     filename = apt_keyring()
     dirname = os.path.dirname(filename)
     if not os.path.isdir(dirname):
-        rdebug('- creating the {dir} directory first'.format(dir=dirname))
+        rdebug('- creating the {dir} directory first'.format(dir=dirname),
+               cond='repo-add')
         os.mkdir(dirname, 0o755)
-    rdebug('about to invoke apt-key add {keyfile}'.format(keyfile=keyfile))
+    rdebug('about to invoke apt-key add {keyfile}'.format(keyfile=keyfile),
+           cond='repo-add')
     subprocess.check_call(['apt-key', '--keyring', filename, 'add', keyfile])
 
 
@@ -131,9 +133,9 @@ def install_apt_repo():
     """
     Add the StorPool package repository to the local APT setup.
     """
-    rdebug('install_apt_repo() invoked')
+    rdebug('install_apt_repo() invoked', cond='repo-add')
 
-    rdebug('cleaning up the /etc/apt/sources.list file first')
+    rdebug('cleaning up the /etc/apt/sources.list file first', cond='repo-add')
     sname = '/etc/apt/sources.list'
     with open(sname, mode='r') as f:
         with tempfile.NamedTemporaryFile(dir='/etc/apt',
@@ -162,11 +164,12 @@ def install_apt_repo():
     contents = apt_file_contents(repo_url())
     text = '{mandatory}\n# {optional}\n'.format(**contents)
     filename = apt_sources_list()
-    rdebug('creating the {fname} file'.format(fname=filename))
-    rdebug('contents: {text}'.format(text=text))
+    rdebug('creating the {fname} file'.format(fname=filename), cond='repo-add')
+    rdebug('contents: {text}'.format(text=text), cond='repo-add')
     dirname = os.path.dirname(filename)
     if not os.path.isdir(dirname):
-        rdebug('- creating the {dir} directory first'.format(dir=dirname))
+        rdebug('- creating the {dir} directory first'.format(dir=dirname),
+               cond='repo-add')
         os.mkdir(dirname, mode=0o755)
     with tempfile.NamedTemporaryFile(dir=dirname,
                                      mode='w+t',
@@ -258,11 +261,12 @@ def stop():
 
     for fname in (apt_sources_list(), apt_keyring()):
         if os.path.isfile(fname):
-            rdebug('- trying to remove {name}'.format(name=fname))
+            rdebug('- trying to remove {name}'.format(name=fname),
+                   cond='repo-add')
             try:
                 os.unlink(fname)
             except Exception as e:
-                rdebug('  - could not remove {name}: {e}'
+                rdebug('- could not remove {name}: {e}'
                        .format(name=fname, e=e))
         else:
             rdebug('- no {name} to remove'.format(name=fname))
