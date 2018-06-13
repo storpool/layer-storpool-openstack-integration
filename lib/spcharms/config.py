@@ -169,3 +169,15 @@ def unset_meta_config():
     global cached_meta
     cached_meta = None
     reactive.remove_state('storpool-helper.config-set')
+
+
+def get_meta_generation():
+    return unitdata.kv().get(kvdata.KEY_META_GENERATION)
+
+
+def set_meta_generation(gen):
+    unitdata.kv().set(kvdata.KEY_META_GENERATION, gen)
+
+
+def unset_meta_generation():
+    unitdata.kv().unset(kvdata.KEY_META_GENERATION)
