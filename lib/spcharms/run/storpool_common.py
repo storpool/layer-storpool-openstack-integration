@@ -141,6 +141,33 @@ def install_package():
         configure_cgroups()
 
 
+def parse_cgroup_slice_size():
+    vs = spconfig.m().get('cgroup_slice_size', None)
+    if vs is None or vs == '':
+        raise sperror.StorPoolNoConfigException(['cgroup_slice_size'])
+    d = dict(map(lambda s: s.split(':'), vs.split()))
+    exp = ['kernel', 'storpool', 'system', 'user']
+    ks = sorted(d.keys())
+    if ks != exp:
+        raise sperror.StorPoolException(
+            'Invalid cgroup_slice_size keys: must have exactly {exp}'
+            .format(exp=exp))
+
+    res = {}
+    for k in ks:
+        try:
+            v = int(d[k])
+            bad = False
+        except ValueError:
+            bad = True
+        if bad or v < 0:
+            raise sperror.StorPoolException(
+                'Invalid cgroup_slice_size value for {k}'.format(k=k))
+        res['mem_' + k] = v * 1024
+
+    return res
+
+
 def configure_cgroups():
     """
     Create the /etc/cgconfig.d/*.slice control group configuration.
@@ -204,32 +231,27 @@ def configure_cgroups():
                     raise spe('Could not parse the "{u}" unit for MemTotal ' +
                               'in /proc/meminfo'.format(u=words[2]))
                 break
-    mem_system = 4 * 1024
-    mem_user = 4 * 1024
-    mem_storpool = 1 * 1024
-    mem_kernel = 10 * 1024
+    mem = parse_cgroup_slice_size()
     if sputils.bypassed('very_little_memory'):
         hookenv.log('The "very_little_memory" bypass is meant '
                     'FOR DEVELOPMENT ONLY!  DO NOT run a StorPool cluster in '
                     'production with it!', hookenv.WARNING)
-        mem_system = 1 * 1900
-        mem_user = 1 * 512
-        mem_storpool = 1 * 1024
-        mem_kernel = 1 * 512
-    mem_reserved = mem_system + mem_user + mem_storpool + mem_kernel
+        mem['mem_system'] = 1 * 1900
+        mem['mem_user'] = 1 * 512
+        mem['mem_storpool'] = 1 * 1024
+        mem['mem_kernel'] = 1 * 512
+    mem_reserved = mem['mem_system'] + mem['mem_user'] + mem['mem_storpool'] \
+        + mem['mem_kernel']
     if mem_total <= mem_reserved:
         raise spe('Not enough memory, only have {total}M, need {mem}M'
                   .format(mem=mem_reserved, total=mem_total))
-    mem_machine = mem_total - mem_reserved
-    tdata.update({
-        'mem_system': mem_system,
-        'memsw_system': mem_system + total_swap,
-        'mem_user': mem_user,
-        'memsw_user': mem_user + total_swap,
-        'mem_storpool': mem_storpool,
-        'mem_machine': mem_machine,
-        'memsw_machine': mem_machine + total_swap,
-    })
+    mem['mem_machine'] = mem_total - mem_reserved
+
+    mem['memsw_system'] = mem['mem_system'] + total_swap
+    mem['memsw_user'] = mem['mem_user'] + total_swap
+    mem['memsw_machine'] = mem['mem_machine'] + total_swap
+
+    tdata.update(mem)
 
     rdebug('generating the cgroup configuration: {tdata}'.format(tdata=tdata))
     if not os.path.isdir('/etc/cgconfig.d'):

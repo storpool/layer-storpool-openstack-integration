@@ -256,6 +256,9 @@ class TestStorPoolCommon(unittest.TestCase):
             pass
 
         # Go on then...
+        r_config.r_set('cgroup_slice_size',
+                       'system:4 user:4 storpool:1 kernel:10',
+                       changed=False)
         check_call.side_effect = None
         mock_file = mock.mock_open(read_data=COMBINED_LINE)
         with mock.patch('spcharms.run.storpool_common.open', mock_file,

@@ -3,6 +3,10 @@ options:
     type: string
     description: Consciously bypass some of the configuration checks.
     default: none
+  cgroup_slice_size:
+    type: string
+    description: The size of the various control group memory slices.
+    default: system:4 user:4 storpool:1 kernel:10
   handle_lxc:
     type: boolean
     description: Specify whether LXC containers should be searched for applications.
