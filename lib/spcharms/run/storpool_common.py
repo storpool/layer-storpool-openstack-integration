@@ -81,6 +81,8 @@ def install_package():
         'kmod-storpool-' + spmajmin + '-' + os.uname().release: '*',
         'python-storpool-' + spmajmin: '*',
     }
+    if not sputils.check_in_lxc():
+        packages['systemd-container'] = '*'
 
     spstatus.npset('maintenance', 'querying the installed StorPool packages')
     for pattern in ('storpool-*', 'kmod-storpool-*', 'python-storpool-*'):
