@@ -112,6 +112,7 @@ def enable_and_start():
     nova_found = False
     rdebug('- trying to detect OpenStack components')
     safe_path = ['env', 'PATH=/usr/sbin:/usr/bin:/sbin:/bin']
+    check_groups = []
     for comp in openstack_components:
         res = sputils.exec(safe_path + ['sp-openstack', '--', 'detect', comp])
         if res['res'] != 0:
@@ -127,6 +128,9 @@ def enable_and_start():
         if res['res'] == 0:
             rdebug('    - {comp} integration already there'
                    .format(comp=comp))
+            if comp in ('cinder', 'nova'):
+                check_groups.append(comp)
+                rdebug('     - will recheck the spool dir and groups')
         else:
             rdebug('    - {comp} MISSING integration'.format(comp=comp))
             rdebug('    - running sp-openstack install {comp}'
@@ -142,6 +146,15 @@ def enable_and_start():
         rdebug('    - done with {comp}'.format(comp=comp))
 
     rdebug('done with the OpenStack components')
+
+    if check_groups:
+        rdebug('Found interesting components, checking the group membership')
+        res = sputils.exec(safe_path +
+                           ['sp-openstack', '-T',
+                            txn.module_name(), '--', 'groups'] + check_groups)
+        if res['res'] != 0:
+            raise spe('Could not setup the StorPool OpenStack '
+                      'groups for {grps}'.format(grps=check_groups))
 
     if nova_found:
         rdebug('Found Nova on bare metal, trying to restart nova-compute')
