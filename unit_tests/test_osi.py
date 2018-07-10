@@ -103,6 +103,10 @@ def exec_with_output(cmd):
         comp_tester.assertIn(cmd[5], comp['all'])
         comp['installed'].add(cmd[5])
         return {'res': 0}
+    elif cmd[0:5] == ['sp-openstack', '-T', 'charm-storpool-block',
+                      '--', 'groups']:
+        comp_tester.assertIn(cmd[5], comp['all'])
+        return {'res': 0}
     else:
         comp_tester.fail('Unexpected command {cmd} '
                          'passed to exec_with_output()'
