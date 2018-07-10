@@ -315,7 +315,8 @@ class TestStorPoolOpenStack(unittest.TestCase):
 
         def subprocess_call_validate(cmd, **kwargs):
             if cmd not in (
-                ['service', 'nova-compute', 'restart'],
+                ['systemctl', 'restart', 'cinder-volume'],
+                ['systemctl', 'restart', 'nova-compute'],
             ) and cmd[0] != 'juju-log':
                 self.fail('subprocess.call() invoked for '
                           'unexpected command {cmd}'.format(cmd=cmd))

@@ -109,7 +109,7 @@ def enable_and_start():
     rdebug('- got SP_OURID {ourid}'.format(ourid=sp_ourid))
 
     spe = sperror.StorPoolException
-    nova_found = False
+    restart = {}
     rdebug('- trying to detect OpenStack components')
     safe_path = ['env', 'PATH=/usr/sbin:/usr/bin:/sbin:/bin']
     check_groups = []
@@ -121,7 +121,7 @@ def enable_and_start():
         rdebug('    - {comp} FOUND!'.format(comp=comp))
 
         if comp == 'nova':
-            nova_found = True
+            restart[comp] = True
             rdebug('     - found Nova on bare metal, will try to restart it')
 
         if comp in ('cinder', 'nova'):
@@ -143,6 +143,7 @@ def enable_and_start():
             if res['res'] != 0:
                 raise spe('Could not install the StorPool OpenStack '
                           'integration for {comp}'.format(comp=comp))
+            restart[comp] = True
 
         rdebug('    - done with {comp}'.format(comp=comp))
 
@@ -173,16 +174,21 @@ def enable_and_start():
                 groups.append('disk')
                 subprocess.check_call(['usermod', '-G', ','.join(groups),
                                        '--', comp])
+                restart[comp] = True
 
-    if nova_found:
-        rdebug('Found Nova on bare metal, trying to restart nova-compute')
-        rdebug('(errors will be ignored)')
-        res = subprocess.call(['service', 'nova-compute', 'restart'])
-        if res == 0:
-            rdebug('Well, looks like it was restarted successfully')
-        else:
-            rdebug('"service nova-compute restart" returned '
-                   'a non-zero exit code {res}, ignoring it'.format(res=res))
+    service_names = {
+        'cinder': 'cinder-volume',
+        'nova': 'nova-compute',
+        'os_brick': None,
+    }
+    for comp in sorted(restart.keys()):
+        svc = service_names[comp]
+        if svc is None:
+            rdebug('Nothing to restart for {comp}'.format(comp=comp))
+            continue
+        rdebug('Restarting the {svc} service (errors will be ignored)'
+               .format(svc=svc))
+        subprocess.call(['systemctl', 'restart', svc])
 
     spstatus.npset('maintenance', '')
 
