@@ -297,6 +297,7 @@ class TestStorPoolOpenStack(unittest.TestCase):
         isfile.return_value = False
         isdir.return_value = True
         exists.return_value = False
+        check_output.return_value = bytes('disk\n', 'UTF-8')
 
         global comp
         comp = {

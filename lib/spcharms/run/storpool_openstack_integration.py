@@ -124,13 +124,14 @@ def enable_and_start():
             nova_found = True
             rdebug('     - found Nova on bare metal, will try to restart it')
 
+        if comp in ('cinder', 'nova'):
+            check_groups.append(comp)
+            rdebug('     - will recheck the spool dir and groups')
+
         res = sputils.exec(safe_path + ['sp-openstack', '--', 'check', comp])
         if res['res'] == 0:
             rdebug('    - {comp} integration already there'
                    .format(comp=comp))
-            if comp in ('cinder', 'nova'):
-                check_groups.append(comp)
-                rdebug('     - will recheck the spool dir and groups')
         else:
             rdebug('    - {comp} MISSING integration'.format(comp=comp))
             rdebug('    - running sp-openstack install {comp}'
@@ -155,6 +156,23 @@ def enable_and_start():
         if res['res'] != 0:
             raise spe('Could not setup the StorPool OpenStack '
                       'groups for {grps}'.format(grps=check_groups))
+
+        # Make sure the service accounts are also in the "disk" group.
+        for comp in check_groups:
+            out = subprocess.check_output(['id', '-Gn', '--', comp])
+            lines = out.decode().strip().split('\n')
+            if len(lines) != 1:
+                raise spe(
+                    'Could not check whether the {comp} account is in '
+                    'the "disk" group: unexpected "id -Gn" output: {lines}'
+                    .format(comp=comp, lines=lines))
+            groups = lines[0].split(' ')
+            if 'disk' not in lines[0].split(' '):
+                rdebug('Adding the {comp} service account to the "disk" group'
+                       .format(comp=comp))
+                groups.append('disk')
+                subprocess.check_call(['usermod', '-G', ','.join(groups),
+                                       '--', comp])
 
     if nova_found:
         rdebug('Found Nova on bare metal, trying to restart nova-compute')
