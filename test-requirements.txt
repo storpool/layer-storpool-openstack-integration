@@ -2,5 +2,6 @@ flake8
 os-testr
 ddt
 mock
+netplan
 charmhelpers
 charms.reactive

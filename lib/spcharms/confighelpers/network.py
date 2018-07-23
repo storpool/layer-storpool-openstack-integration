@@ -5,7 +5,10 @@ network interface configuration if needed.
 import glob
 import os
 import tempfile
+import yaml
 
+from spcharms import error as sperror
+from spcharms import netplan as spnetplan
 from spcharms import txn
 from spcharms import utils as sputils
 
@@ -114,6 +117,49 @@ def fixup_interfaces_file(fname, data, handled):
            cond='fixup-ifaces')
 
 
+def fixup_interfaces_netplan(fname, data):
+    """
+    Explicitly set the MTU on all the relevant interfaces in
+    a netplan configuration file.
+    """
+    np = spnetplan.get_related(ifaces=list(data.keys()),
+                               exclude=[os.path.basename(fname)])
+    rdebug('Netplan configuration: {np}'.format(np=np),
+           cond='fixup-ifaces')
+
+    npdata = {}
+    for name, cfg in data.items():
+        mtu = cfg.get('MTU')
+        if mtu is None:
+            continue
+
+        if name not in np.data:
+            raise sperror.StorPoolException(
+              'No {iface} in the netplan config'.format(iface=name))
+        t = np.data[name].section
+
+        if t not in npdata:
+            npdata[t] = {}
+        npdata[t][name] = {
+            'mtu': int(mtu),
+        }
+
+    npdata = {
+        'network': {
+            'version': 2,
+            **npdata
+        },
+    }
+    rdebug('netplan data: {np}'.format(np=npdata), cond='fixup-interfaces')
+
+    with tempfile.NamedTemporaryFile(dir=os.path.dirname(fname),
+                                     mode='w+t',
+                                     delete=True) as tempf:
+        print(yaml.dump(npdata), file=tempf, end='')
+        tempf.flush()
+        txn.install('-o', 'root', '-g', 'root', '-m', '644', tempf.name, fname)
+
+
 def fixup_interfaces(ifaces):
     """
     Modify the system network configuration to add the post-up commands to
@@ -123,6 +169,7 @@ def fixup_interfaces(ifaces):
            cond='fixup-ifaces')
 
     # Parse the interface names
+    cfg = {}
     data = {}
     for iface_data in ifaces.split(','):
         parts = iface_data.split('=', 1)
@@ -146,22 +193,31 @@ def fixup_interfaces(ifaces):
                 'MTU': mtu,
                 'IF_VLAN_RAW_DEVICE': parent,
             }
+            cfg[iface] = subst
             data[iface] = list(map(lambda s: s.format(**subst), vlandef))
             subst = {
                 'IFACE': parent,
                 'MTU': mtu,
             }
+            cfg[parent] = subst
             data[parent] = list(map(lambda s: s.format(**subst), nonvlandef))
         else:
             subst = {
                 'IFACE': iface,
                 'MTU': mtu,
             }
+            cfg[iface] = subst
             data[iface] = list(map(lambda s: s.format(**subst), nonvlandef))
 
     rdebug('Gone through the interfaces, got data: {data}'.format(data=data),
            cond='fixup-ifaces')
 
-    rdebug('Now about to go through the system network configuration...',
-           cond='fixup-ifaces')
-    fixup_interfaces_file('/etc/network/interfaces', data, set())
+    if os.path.isdir('/etc/netplan') and \
+       os.path.isfile('/lib/netplan/generate'):
+        rdebug('About to generate the netplan MTU configuration',
+               cond='fixup-ifaces')
+        fixup_interfaces_netplan('/etc/netplan/99-storpool.yaml', cfg)
+    else:
+        rdebug('Now about to go through the system network configuration...',
+               cond='fixup-ifaces')
+        fixup_interfaces_file('/etc/network/interfaces', data, set())

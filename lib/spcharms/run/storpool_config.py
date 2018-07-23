@@ -67,6 +67,7 @@ def install_package():
     packages = {
         'txn-install': '*',
         'storpool-config-' + spmajmin: '*',
+        'netplan-parser': '*',
     }
     newly_installed = sprepo.install_packages(packages)
     if newly_installed:
