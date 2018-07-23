@@ -6,6 +6,7 @@ the node's APT configuration.
 from __future__ import print_function
 
 import os
+import re
 import tempfile
 import subprocess
 
@@ -62,13 +63,29 @@ def rdebug(s, cond=None):
     sputils.rdebug(s, prefix='repo-add', cond=cond)
 
 
+def get_version_codename():
+    with open('/etc/os-release', mode='r') as f:
+        lines = dict(map(lambda s: s.strip().split('=', 1), f.readlines()))
+        codename = lines.get('VERSION_CODENAME', lines.get('UBUNTU_CODENAME'))
+        if codename is None:
+            raise sperror.StorPoolException(
+              'No VERSION_CODENAME or UBUNTU_CODENAME in '
+              'the /etc/os-release file')
+        elif re.match('[a-zA-Z0-9_]+$', codename) is None:
+            raise sperror.StorPoolException(
+              'Invalid codename "{codename}" in the /etc/os-release file'
+              .format(codename=codename))
+        return codename
+
+
 def apt_file_contents(url):
     """
     Generate the text that should be put into the APT sources list.
     """
+    codename = get_version_codename()
     return {
-        'mandatory': 'deb {url} xenial main'.format(url=url),
-        'optional': 'deb-src {url} xenial main'.format(url=url),
+        'mandatory': 'deb {url} {name} main'.format(url=url, name=codename),
+        'optional': 'deb-src {url} {name} main'.format(url=url, name=codename),
     }
 
 
