@@ -10,7 +10,6 @@ import sys
 import unittest
 
 import mock
-import six
 
 lib_path = os.path.realpath('lib')
 if lib_path not in sys.path:
@@ -26,8 +25,8 @@ test_config = {
 
 test_config_string = ''.join(map(lambda i: '{var}={val}\n'.format(var=i[0],
                                                                   val=i[1]),
-                                 six.iteritems(test_config)))
-test_config_bytes = six.b(test_config_string)
+                                 test_config.items()))
+test_config_bytes = test_config_string.encode('UTF-8')
 
 test_other_config = {
     'something': 'else',
