@@ -6,6 +6,7 @@ the node's APT configuration.
 from __future__ import print_function
 
 import os
+import platform
 import re
 import tempfile
 import subprocess
@@ -64,6 +65,10 @@ def rdebug(s, cond=None):
 
 
 def get_version_codename():
+    dist = platform.dist()
+    if dist[0] == 'Ubuntu':
+        return dist[2]
+
     with open('/etc/os-release', mode='r') as f:
         lines = dict(map(lambda s: s.strip().split('=', 1), f.readlines()))
         codename = lines.get('VERSION_CODENAME', lines.get('UBUNTU_CODENAME'))
