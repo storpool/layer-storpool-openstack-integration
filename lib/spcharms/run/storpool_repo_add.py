@@ -24,6 +24,8 @@ APT_SOURCES_FILE = 'storpool-maas.list'
 APT_KEYRING_DIR = 'trusted.gpg.d'
 APT_KEYRING_FILE = 'storpool-maas.gpg'
 
+KNOWN_CODENAMES = ('bionic', 'xenial', 'trusty', 'precise')
+
 
 def apt_sources_list():
     """
@@ -70,13 +72,19 @@ def get_version_codename():
         return dist[2]
 
     with open('/etc/os-release', mode='r') as f:
-        lines = dict(map(lambda s: s.strip().split('=', 1), f.readlines()))
+        lines = {}
+        for line in f.readlines():
+            (k, v) = line.rstrip().split('=', 1)
+            lines[k] = v.strip('"\'')
         codename = lines.get('VERSION_CODENAME', lines.get('UBUNTU_CODENAME'))
+        version = lines.get('VERSION', '').lower()
         if codename is None:
+            for codename in KNOWN_CODENAMES:
+                if codename in version:
+                    return codename
             raise sperror.StorPoolException(
               'No VERSION_CODENAME or UBUNTU_CODENAME in '
-              'the /etc/os-release file; platform.dist() is {dist}'
-              .format(dist=repr(dist)))
+              'the /etc/os-release file')
         elif re.match('[a-zA-Z0-9_]+$', codename) is None:
             raise sperror.StorPoolException(
               'Invalid codename "{codename}" in the /etc/os-release file'
