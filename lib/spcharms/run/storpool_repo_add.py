@@ -146,9 +146,10 @@ def install_apt_key():
         rdebug('- creating the {dir} directory first'.format(dir=dirname),
                cond='repo-add')
         os.mkdir(dirname, 0o755)
-    rdebug('about to invoke apt-key add {keyfile}'.format(keyfile=keyfile),
+    rdebug('about to invoke gpg import into {keyfile}'.format(keyfile=keyfile),
            cond='repo-add')
-    subprocess.check_call(['apt-key', '--keyring', filename, 'add', keyfile])
+    subprocess.check_call(['gpg', '--no-default-keyring',
+                           '--keyring', filename, '--import', keyfile])
 
 
 def install_apt_repo():
@@ -158,9 +159,9 @@ def install_apt_repo():
     rdebug('install_apt_repo() invoked', cond='repo-add')
 
     rdebug('cleaning up the /etc/apt/sources.list file first', cond='repo-add')
-    sname = '/etc/apt/sources.list'
+    sname = '{apt}/sources.list'.format(apt=APT_CONFIG_DIR)
     with open(sname, mode='r') as f:
-        with tempfile.NamedTemporaryFile(dir='/etc/apt',
+        with tempfile.NamedTemporaryFile(dir=APT_CONFIG_DIR,
                                          mode='w+t',
                                          delete=False) as tempf:
             removed = 0
