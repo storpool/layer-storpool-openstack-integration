@@ -66,7 +66,7 @@ def rdebug(s, cond=None):
 
 def get_version_codename():
     dist = platform.dist()
-    if dist[0] == 'Ubuntu':
+    if dist[0].lower() == 'ubuntu':
         return dist[2]
 
     with open('/etc/os-release', mode='r') as f:
@@ -75,7 +75,8 @@ def get_version_codename():
         if codename is None:
             raise sperror.StorPoolException(
               'No VERSION_CODENAME or UBUNTU_CODENAME in '
-              'the /etc/os-release file')
+              'the /etc/os-release file; platform.dist() is {dist}'
+              .format(dist=repr(dist)))
         elif re.match('[a-zA-Z0-9_]+$', codename) is None:
             raise sperror.StorPoolException(
               'Invalid codename "{codename}" in the /etc/os-release file'
