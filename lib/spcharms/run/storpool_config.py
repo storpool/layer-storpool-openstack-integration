@@ -147,7 +147,7 @@ def run():
     config_changed()
     install_package()
     write_out_config()
-    setup_interfaces()
+    # setup_interfaces()
 
 
 def stop():
