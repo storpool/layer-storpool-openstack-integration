@@ -57,6 +57,14 @@ def install_package():
     else:
         rdebug('it seems that all the packages were installed already')
 
+    if spmajmin != '18.01':
+        rdebug('starting storpool_hugepages')
+        subprocess.check_call(['storpool_hugepages', '-v'])
+        rdebug('enabling and starting the storpool_hugepages service')
+        host.service_resume('storpool_hugepages')
+    else:
+        rdebug('skipping storpool_hugepages on StorPool 18.01')
+
     spstatus.npset('maintenance', '')
 
 
