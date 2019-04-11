@@ -142,6 +142,65 @@ def has_apt_repo():
         return found_mandatory
 
 
+def get_gpg_version_line(prog):
+    """ Parse a GnuPG version line. """
+    try:
+        lines = subprocess.check_output([prog, '--version']).decode('Latin-1')
+    except (subprocess.CalledProcessError, OSError) as exc:
+        rdebug('Could not execute `{prog} --version`: {exc}'
+               .format(prog=prog, exc=exc),
+               cond='repo-add')
+        return {}
+
+    first = lines.split('\n')[0]
+    rdebug('--version first line: {first}'.format(first=first),
+           cond='repo-add')
+    res = {'full': first}
+
+    fields = first.split()
+    rdebug('--version fields: {fields}'.format(fields=repr(fields)),
+           cond='repo-add')
+    if len(fields) == 3 and fields[0] == 'gpg':
+        res['version'] = fields[2]
+        rdebug('--version looks like GnuPG version {ver}'
+               .format(ver=res['version']),
+               cond='repo-add')
+
+    return res
+
+
+def is_gpg_1(prog):
+    """ Figure out if a program is a GnuPG 1.x executable. """
+    rdebug('Checking whether {prog} is a GnuPG 1.x executable'
+           .format(prog=prog),
+           cond='repo-add')
+    line = get_gpg_version_line(prog)
+    return line.get('version', '').startswith('1.')
+
+
+def is_gpg_executable(prog):
+    """ Figure out if a program is a GnuPG executable at all. """
+    rdebug('Checking whether {prog} is a GnuPG executable at all'
+           .format(prog=prog),
+           cond='repo-add')
+    return 'version' in get_gpg_version_line(prog)
+
+
+def detect_gpg_program():
+    """ Detect (possibly install) the GnuPG 1.x executable to use. """
+    rdebug('Trying to figure out what GnuPG program to use', cond='repo-add')
+    if is_gpg_1('gpg'):
+        return 'gpg'
+    if not is_gpg_executable('gpg1'):
+        subprocess.check_call([
+            'env', 'DEBIAN_FRONTENT=noninteractive',
+            'apt-get', '-y', 'install', 'gnupg1',
+        ])
+    if is_gpg_1('gpg1'):
+        return 'gpg1'
+    raise Exception('Could not find a GnuPG 1.x executable')
+
+
 def install_apt_key():
     """
     Add the StorPool package signing key to the local APT setup.
@@ -157,8 +216,12 @@ def install_apt_key():
         os.mkdir(dirname, 0o755)
     rdebug('about to invoke gpg import into {keyfile}'.format(keyfile=keyfile),
            cond='repo-add')
-    subprocess.check_call(['gpg', '--no-default-keyring',
+    gpg_prog = detect_gpg_program()
+    rdebug('Detected GnuPG 1.x program {gpg}'.format(gpg=gpg_prog),
+           cond='repo-add')
+    subprocess.check_call([gpg_prog, '--no-default-keyring',
                            '--keyring', filename, '--import', keyfile])
+    os.chmod(filename, 0o644)
 
 
 def install_apt_repo():
