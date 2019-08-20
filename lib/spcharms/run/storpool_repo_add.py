@@ -5,6 +5,7 @@ the node's APT configuration.
 
 from __future__ import print_function
 
+import datetime
 import os
 import platform
 import re
@@ -116,10 +117,43 @@ def has_apt_key():
                                        '--with-colons'
                                       ])
     kdata = key_data()
-    return bool(list(filter(
-        lambda s: s.startswith(kdata),
-        current.decode().split('\n')
-    )))
+    rdebug('- got key data {kdata} and output {output}'
+           .format(kdata=repr(kdata), output=repr(current)))
+    for line in current.decode().split('\n'):
+        rdebug('- line {line}'.format(line=repr(line)))
+        if not line.startswith(kdata):
+            continue
+        rdebug('  - ours?')
+        fields = line.split(':')
+        rdebug('  - checking {flds}'.format(flds=repr(fields)))
+        expiry = fields[6]
+        exp_fields = expiry.split('-')
+        rdebug('  - and {flds}'.format(flds=repr(exp_fields)))
+
+        try:
+            if len(exp_fields) == 1:
+                exp_time = datetime.datetime.fromtimestamp(int(exp_fields[0]))
+            elif len(exp_fields) == 3:
+                exp_time = datetime.datetime(
+                    year=int(exp_fields[0]),
+                    month=int(exp_fields[1]),
+                    day=int(exp_fields[2]),
+                )
+        except Exception as err:
+            rdebug('- could not parse {line}: {etype}: {err}'
+                   .format(line=repr(line),
+                           etype=type(err).__name__,
+                           err=repr(err)))
+            continue
+        rdebug('  - exp_time {exp}'.format(exp=exp_time))
+
+        if exp_time > datetime.datetime.now():
+            rdebug('  - found one!')
+            return True
+        rdebug('  - nah...')
+
+    rdebug('- nothing found')
+    return False
 
 
 def has_apt_repo():
