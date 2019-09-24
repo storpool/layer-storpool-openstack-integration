@@ -112,7 +112,7 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         r_config.r_clear_config()
         sputils.err.side_effect = lambda *args: self.fail_on_err(*args)
         self.tempdir = tempfile.TemporaryDirectory(prefix='storpool-repo-add.')
-        testee.APT_CONFIG_DIR = self.tempdir.name
+        self.runner = testee.RepoAddRunner(config_dir=self.tempdir.name)
 
     def tearDown(self):
         """
@@ -131,7 +131,7 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         Do some basic checks on the key data used internally to
         identify the StorPool MAAS repository key.
         """
-        keydata = testee.key_data()
+        keydata = self.runner.key_data()
         self.assertTrue(keydata.startswith('pub:'))
         self.assertGreater(len(keydata.split(':')), 4)
         return keydata
@@ -141,11 +141,11 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         Do some basic checks that the final location of the StorPool
         MAAS repository signing key file is sane.
         """
-        fname = testee.apt_keyring()
+        fname = self.runner.apt_keyring()
         self.assertEqual(self.tempdir.name,
                          os.path.commonpath([self.tempdir.name, fname]))
-        self.assertEqual(testee.APT_CONFIG_DIR,
-                         os.path.commonpath([testee.APT_CONFIG_DIR, fname]))
+        self.assertEqual(self.runner.config_dir,
+                         os.path.commonpath([self.runner.config_dir, fname]))
         return fname
 
     def check_keyfile_gpg(self, keydata, keyfile):
@@ -174,12 +174,12 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         if os.path.exists(keyfile):
             os.path.unlink(keyfile)
         self.assertFalse(os.path.exists(keyfile))
-        testee.install_apt_key()
+        self.runner.install_apt_key()
         self.assertTrue(os.path.isfile(keyfile))
 
         self.check_keyfile_gpg(keydata, keyfile)
 
-        testee.stop()
+        testee.stop(runner=self.runner)
         self.assertFalse(os.path.exists(keyfile))
 
     def prepare_global_sources_list(self, fname):
@@ -202,11 +202,11 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         Do some basic checks that the final location of the StorPool
         APT sources list file is sane.
         """
-        fname = testee.apt_sources_list()
+        fname = self.runner.apt_sources_list()
         self.assertEqual(self.tempdir.name,
                          os.path.commonpath([self.tempdir.name, fname]))
-        self.assertEqual(testee.APT_CONFIG_DIR,
-                         os.path.commonpath([testee.APT_CONFIG_DIR, fname]))
+        self.assertEqual(self.runner.config_dir,
+                         os.path.commonpath([self.runner.config_dir, fname]))
         return fname
 
     def check_sources_list_contents(self, listfile):
@@ -259,7 +259,7 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         """
         r_config.r_set('storpool_repo_url', REPO_URL, True)
 
-        global_list = '{apt}/sources.list'.format(apt=testee.APT_CONFIG_DIR)
+        global_list = '{apt}/sources.list'.format(apt=self.runner.config_dir)
         if os.path.exists(global_list):
             os.path.unlink(global_list)
         self.assertFalse(os.path.exists(global_list))
@@ -271,9 +271,9 @@ class TestStorPoolRepoAdd(unittest.TestCase):
             os.path.unlink(listfile)
         self.assertFalse(os.path.exists(listfile))
 
-        self.assertFalse(testee.has_apt_repo())
-        testee.install_apt_repo()
-        self.assertTrue(testee.has_apt_repo())
+        self.assertFalse(self.runner.has_apt_repo())
+        self.runner.install_apt_repo()
+        self.assertTrue(self.runner.has_apt_repo())
 
         self.assertTrue(os.path.isfile(global_list))
         self.check_global_sources_list(global_list)
@@ -282,11 +282,11 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         self.check_sources_list_contents(listfile)
 
         self.assertTrue(self.uncomment_deb_src(listfile))
-        self.assertTrue(testee.has_apt_repo())
+        self.assertTrue(self.runner.has_apt_repo())
 
-        testee.stop()
+        testee.stop(runner=self.runner)
         self.assertFalse(os.path.exists(listfile))
-        self.assertFalse(testee.has_apt_repo())
+        self.assertFalse(self.runner.has_apt_repo())
 
     def test_error(self):
         """
