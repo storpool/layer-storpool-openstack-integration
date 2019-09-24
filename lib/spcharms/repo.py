@@ -22,9 +22,9 @@ class StorPoolRepoException(Exception):
 
 
 re_policy = {
-    'installed': re.compile('\s* Installed: \s+ (?P<version> \S+ ) \s* $',
+    'installed': re.compile(r'\s* Installed: \s+ (?P<version> \S+ ) \s* $',
                             re.X),
-    'candidate': re.compile('\s* Candidate: \s+ (?P<version> \S+ ) \s* $',
+    'candidate': re.compile(r'\s* Candidate: \s+ (?P<version> \S+ ) \s* $',
                             re.X),
 }
 

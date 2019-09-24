@@ -54,10 +54,10 @@ def check_spopenstack_processes(name):
                   .format(name=name, res=repr(res[0])))
     ps_cmd = ['ps', '-h', '-o', 'pid,user,group,supgrp']
     re_line = re.compile(
-        '(?P<pid> 0 | [1-9][0-9]*) \s+ '
-        '(?P<u> \S+ ) \s+ '
-        '(?P<g> \S+ ) \s+ '
-        '(?P<supp> \S+ ) $',
+        r'(?P<pid> 0 | [1-9][0-9]*) \s+ '
+        r'(?P<u> \S+ ) \s+ '
+        r'(?P<g> \S+ ) \s+ '
+        r'(?P<supp> \S+ ) $',
         re.X)
     for pid in pids:
         rdebug('- examining pid {pid}'.format(pid=pid))
