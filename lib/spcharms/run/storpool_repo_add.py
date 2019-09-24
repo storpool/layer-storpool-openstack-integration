@@ -253,8 +253,12 @@ def install_apt_key():
     gpg_prog = detect_gpg_program()
     rdebug('Detected GnuPG 1.x program {gpg}'.format(gpg=gpg_prog),
            cond='repo-add')
-    subprocess.check_call([gpg_prog, '--no-default-keyring',
-                           '--keyring', filename, '--import', keyfile])
+    with tempfile.TemporaryDirectory() as tempd:
+        subprocess.check_call([
+            'env', 'GNUPGHOME={tempd}'.format(tempd=tempd),
+            gpg_prog, '--no-default-keyring', '--keyring', filename,
+            '--import', keyfile
+        ])
     os.chmod(filename, 0o644)
 
 
