@@ -182,21 +182,6 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         testee.stop(runner=self.runner)
         self.assertFalse(os.path.exists(keyfile))
 
-    def prepare_global_sources_list(self, fname):
-        """
-        Prepare a file similar to /etc/apt/sources.list that contains
-        "old" StorPool repo entries that should be removed.
-        """
-        with open(fname, mode='w') as f:
-            print('\n'.join(LINES_OBSOLETE[:2]), file=f)
-            print('\n'.join(LINES_REAL), file=f)
-            print('\n'.join(LINES_OBSOLETE[2:]), file=f)
-
-    def check_global_sources_list(self, fname):
-        with open(fname, mode='r') as f:
-            lines = f.readlines()
-        self.assertEqual(lines, [line + '\n' for line in LINES_REAL])
-
     def check_sources_list(self):
         """
         Do some basic checks that the final location of the StorPool
@@ -259,13 +244,6 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         """
         r_config.r_set('storpool_repo_url', REPO_URL, True)
 
-        global_list = '{apt}/sources.list'.format(apt=self.runner.config_dir)
-        if os.path.exists(global_list):
-            os.path.unlink(global_list)
-        self.assertFalse(os.path.exists(global_list))
-        self.prepare_global_sources_list(global_list)
-        self.assertTrue(os.path.isfile(global_list))
-
         listfile = self.check_sources_list()
         if os.path.exists(listfile):
             os.path.unlink(listfile)
@@ -274,9 +252,6 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         self.assertFalse(self.runner.has_apt_repo())
         self.runner.install_apt_repo()
         self.assertTrue(self.runner.has_apt_repo())
-
-        self.assertTrue(os.path.isfile(global_list))
-        self.check_global_sources_list(global_list)
 
         self.assertTrue(os.path.exists(listfile))
         self.check_sources_list_contents(listfile)

@@ -261,33 +261,6 @@ class RepoAddRunner:
         """ Add the StorPool package repository to the local APT setup. """
         rdebug('install_apt_repo() invoked', cond='repo-add')
 
-        rdebug('cleaning up the /etc/apt/sources.list file first',
-               cond='repo-add')
-        sname = '{apt}/sources.list'.format(apt=self.config_dir)
-        with open(sname, mode='r') as f:
-            with tempfile.NamedTemporaryFile(dir=self.config_dir,
-                                             mode='w+t',
-                                             delete=False) as tempf:
-                removed = 0
-                for line in f.readlines():
-                    if 'https://debian.ringlet.net/storpool-maas' in line or \
-                       'https://debian.ringlet.net/storpool-juju' in line or \
-                       'http://repo.storpool.com/storpool-maas' in line or \
-                       '@repo.storpool.com/storpool-maas' in line:
-                        removed = removed + 1
-                        continue
-                    print(line, file=tempf, end='')
-
-                if removed:
-                    rdebug('Removing {removed} lines from {sname}'
-                           .format(removed=removed, sname=sname))
-                    tempf.flush()
-                    os.rename(tempf.name, sname)
-                else:
-                    rdebug('No need to remove any lines from {sname}'
-                           .format(sname=sname))
-                    os.unlink(tempf.name)
-
         contents = self.apt_file_contents(self.repo_url())
         text = '{mandatory}\n# {optional}\n'.format(**contents)
         filename = self.apt_sources_list()
