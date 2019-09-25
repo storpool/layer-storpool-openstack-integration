@@ -112,7 +112,15 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         r_config.r_clear_config()
         sputils.err.side_effect = lambda *args: self.fail_on_err(*args)
         self.tempdir = tempfile.TemporaryDirectory(prefix='storpool-repo-add.')
-        self.runner = testee.RepoAddRunner(config_dir=self.tempdir.name)
+
+        apt_dir = "{base}/apt".format(base=self.tempdir.name)
+        keyring_dir = "{base}/keyrings".format(base=self.tempdir.name)
+        os.mkdir(apt_dir, mode=0o700)
+        os.mkdir(keyring_dir, mode=0o700)
+        self.runner = testee.RepoAddRunner(
+            config_dir=apt_dir,
+            keyring_dir=keyring_dir,
+        )
 
     def tearDown(self):
         """
@@ -136,29 +144,40 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         self.assertGreater(len(keydata.split(':')), 4)
         return keydata
 
-    def check_keyfile(self):
+    def check_keyfiles(self):
         """
         Do some basic checks that the final location of the StorPool
         MAAS repository signing key file is sane.
         """
-        fname = self.runner.apt_keyring()
-        self.assertEqual(self.tempdir.name,
-                         os.path.commonpath([self.tempdir.name, fname]))
-        self.assertEqual(self.runner.config_dir,
-                         os.path.commonpath([self.runner.config_dir, fname]))
-        return fname
+        res = []
+        for fname in self.runner.keyring_files:
+            self.assertEqual(
+                self.tempdir.name,
+                os.path.commonpath([self.tempdir.name, fname]))
+            self.assertEqual(
+                self.runner.keyring_dir,
+                os.path.commonpath([self.runner.keyring_dir, fname]))
+            res.append(fname)
+        return res
 
-    def check_keyfile_gpg(self, keydata, keyfile):
+    def check_keyfiles_gpg(self, keydata, keyfiles):
         """
         Spawn a gpg child process to check that the key file actually
         contains the key identified by the key data.
         """
-        lines = subprocess.check_output([
-            'gpg', '--list-keys', '--batch', '--with-colons',
-            '--no-default-keyring', '--keyring', keyfile
-        ]).decode().split('\n')
-        found = filter(lambda s: s.startswith(keydata), lines)
-        self.assertTrue(found)
+        checked = False
+        for keyfile in keyfiles:
+            if '-maas-' not in keyfile:
+                continue
+            checked = True
+            lines = subprocess.check_output([
+                'gpg', '--list-keys', '--batch', '--with-colons',
+                '--no-default-keyring', '--keyring', keyfile
+            ]).decode().split('\n')
+            found = [line for line in lines if line.startswith(keydata)]
+            self.assertTrue(found)
+
+        self.assertTrue(checked)
 
     @mock.patch('charmhelpers.core.hookenv.config', new=lambda: {})
     @mock.patch('charmhelpers.core.hookenv.charm_dir')
@@ -168,100 +187,106 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         """
         charm_dir.return_value = os.getcwd()
 
+        obsolete = os.path.join(
+            self.tempdir.name,
+            'apt',
+            'trusted.gpg.d',
+            'storpool-maas.key')
+        if not os.path.exists(os.path.dirname(obsolete)):
+            os.mkdir(os.path.dirname(obsolete), mode=0o700)
+        with open(obsolete, mode='w', encoding='UTF-8') as obsf:
+            print('hello', file=obsf)
+
         keydata = self.check_keydata()
-        keyfile = self.check_keyfile()
+        keyfiles = self.check_keyfiles()
 
-        if os.path.exists(keyfile):
-            os.path.unlink(keyfile)
-        self.assertFalse(os.path.exists(keyfile))
+        for keyfile in keyfiles:
+            if os.path.exists(keyfile):
+                os.unlink(keyfile)
+            self.assertFalse(os.path.exists(keyfile))
+        self.assertTrue(os.path.isfile(obsolete))
         self.runner.install_apt_key()
-        self.assertTrue(os.path.isfile(keyfile))
+        for keyfile in keyfiles:
+            self.assertTrue(os.path.isfile(keyfile))
+        self.assertFalse(os.path.isfile(obsolete))
 
-        self.check_keyfile_gpg(keydata, keyfile)
+        self.check_keyfiles_gpg(keydata, keyfiles)
 
         testee.stop(runner=self.runner)
-        self.assertFalse(os.path.exists(keyfile))
+        for keyfile in keyfiles:
+            self.assertFalse(os.path.exists(keyfile))
 
     def check_sources_list(self):
         """
         Do some basic checks that the final location of the StorPool
         APT sources list file is sane.
         """
-        fname = self.runner.apt_sources_list()
-        self.assertEqual(self.tempdir.name,
-                         os.path.commonpath([self.tempdir.name, fname]))
-        self.assertEqual(self.runner.config_dir,
-                         os.path.commonpath([self.runner.config_dir, fname]))
-        return fname
+        res = []
+        for fname in self.runner.sources_files:
+            self.assertEqual(
+                self.tempdir.name,
+                os.path.commonpath([self.tempdir.name, fname]))
+            self.assertEqual(
+                self.runner.config_dir,
+                os.path.commonpath([self.runner.config_dir, fname]))
+            res.append(fname)
+        return res
 
-    def check_sources_list_contents(self, listfile):
-        """
-        Actually check the contents of the sources list file.
-        """
-        with open(listfile, mode='r') as listf:
-            first_line = listf.readline()
-            self.assertIsNotNone(first_line)
-            self.assertTrue(first_line.startswith('deb ' + REPO_URL + ' '))
-            second_line = listf.readline()
-            self.assertIsNotNone(second_line)
-            self.assertTrue(second_line
-                            .startswith('# deb-src ' + REPO_URL + ' '))
+    def check_sources_list_contents(self, listfiles):
+        """ Actually check the contents of the sources list file. """
+        checked = False
+        for listfile in listfiles:
+            if '-maas' not in listfile:
+                continue
+            checked = True
+            lines = open(listfile, mode='r', encoding='us-ascii').readlines()
+            self.assertNotEqual(
+                [],
+                [line for line in lines
+                 if line.startswith('Types:') and 'deb' in line.split()])
+            self.assertNotEqual(
+                [],
+                [line for line in lines
+                 if line.startswith('Types:') and 'deb-src' in line.split()])
+            self.assertNotEqual(
+                [],
+                [line for line in lines
+                 if line.startswith('URIs:') and REPO_URL in line])
 
-    def uncomment_deb_src(self, listfile):
-        """
-        Edit the sources list file to uncomment the deb-src line.
-        """
-        dirname = os.path.dirname(listfile)
-        with open(listfile, mode='r') as f:
-            with tempfile.NamedTemporaryFile(dir=dirname,
-                                             prefix='.storpool.',
-                                             suffix='.list',
-                                             mode='w+t',
-                                             delete=False) as tempf:
-                first_line = f.readline()
-                print(first_line, file=tempf, end='')
-
-                second_line = f.readline()
-                modify = second_line.startswith('# deb-src')
-                if modify:
-                    second_line = second_line[2:]
-                print(second_line, file=tempf, end='')
-
-                while True:
-                    line = f.readline()
-                    if line is None or line == '':
-                        break
-                    print(line, file=tempf, end='')
-
-                tempf.flush()
-                os.rename(tempf.name, listfile)
-                return modify
+        self.assertTrue(checked)
 
     @mock.patch('charmhelpers.core.hookenv.config', new=lambda: {})
-    def test_sources_list(self):
+    @mock.patch('charmhelpers.core.hookenv.charm_dir')
+    def test_sources_list(self, charm_dir):
         """
         Test the routines that let APT look at the StorPool repository.
         """
+        charm_dir.return_value = os.getcwd()
         r_config.r_set('storpool_repo_url', REPO_URL, True)
 
-        listfile = self.check_sources_list()
-        if os.path.exists(listfile):
-            os.path.unlink(listfile)
-        self.assertFalse(os.path.exists(listfile))
+        obsolete = os.path.join(self.runner.sources_dir, 'storpool-maas.list')
+        if not os.path.exists(os.path.dirname(obsolete)):
+            os.mkdir(os.path.dirname(obsolete), mode=0o700)
+        with open(obsolete, mode='w', encoding='UTF-8') as obsf:
+            print('hello', file=obsf)
 
-        self.assertFalse(self.runner.has_apt_repo())
+        listfiles = self.check_sources_list()
+        for listfile in listfiles:
+            if os.path.exists(listfile):
+                os.path.unlink(listfile)
+            self.assertFalse(os.path.exists(listfile))
+
+        self.assertTrue(os.path.isfile(obsolete))
         self.runner.install_apt_repo()
-        self.assertTrue(self.runner.has_apt_repo())
+        self.assertFalse(os.path.isfile(obsolete))
 
-        self.assertTrue(os.path.exists(listfile))
-        self.check_sources_list_contents(listfile)
-
-        self.assertTrue(self.uncomment_deb_src(listfile))
-        self.assertTrue(self.runner.has_apt_repo())
+        for listfile in listfiles:
+            self.assertTrue(os.path.exists(listfile))
+        self.check_sources_list_contents(listfiles)
 
         testee.stop(runner=self.runner)
-        self.assertFalse(os.path.exists(listfile))
-        self.assertFalse(self.runner.has_apt_repo())
+        for listfile in listfiles:
+            self.assertFalse(os.path.exists(listfile))
 
     def test_error(self):
         """

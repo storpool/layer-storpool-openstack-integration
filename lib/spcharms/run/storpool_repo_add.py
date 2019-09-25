@@ -5,14 +5,14 @@ the node's APT configuration.
 
 from __future__ import print_function
 
-import datetime
+import base64
 import os
 import platform
 import re
 import tempfile
 import subprocess
 
-from charmhelpers.core import hookenv
+from charmhelpers.core import templating
 
 from spcharms import config as spconfig
 from spcharms import error as sperror
@@ -21,9 +21,9 @@ from spcharms import utils as sputils
 
 DEFAULT_APT_CONFIG_DIR = '/etc/apt'
 DEFAULT_APT_SOURCES_DIR = 'sources.list.d'
-DEFAULT_APT_SOURCES_FILE = 'storpool-maas.list'
-DEFAULT_APT_KEYRING_DIR = 'trusted.gpg.d'
-DEFAULT_APT_KEYRING_FILE = 'storpool-maas.gpg'
+DEFAULT_APT_SOURCES_FILES = ('storpool-maas.sources', 'storpool.sources')
+DEFAULT_KEYRING_DIR = '/usr/share/keyrings'
+DEFAULT_KEYRING_FILES = ('storpool-maas-keyring.gpg', 'storpool-keyring.gpg')
 
 KNOWN_CODENAMES = ('bionic', 'xenial', 'trusty', 'precise')
 
@@ -61,91 +61,97 @@ def get_version_codename():
         return codename
 
 
-def get_gpg_version_line(prog):
-    """ Parse a GnuPG version line. """
-    try:
-        lines = subprocess.check_output([prog, '--version']).decode('Latin-1')
-    except (subprocess.CalledProcessError, OSError) as exc:
-        rdebug('Could not execute `{prog} --version`: {exc}'
-               .format(prog=prog, exc=exc),
-               cond='repo-add')
-        return {}
-
-    first = lines.split('\n')[0]
-    rdebug('--version first line: {first}'.format(first=first),
-           cond='repo-add')
-    res = {'full': first}
-
-    fields = first.split()
-    rdebug('--version fields: {fields}'.format(fields=repr(fields)),
-           cond='repo-add')
-    if len(fields) == 3 and fields[0] == 'gpg':
-        res['version'] = fields[2]
-        rdebug('--version looks like GnuPG version {ver}'
-               .format(ver=res['version']),
-               cond='repo-add')
-
-    return res
-
-
-def is_gpg_1(prog):
-    """ Figure out if a program is a GnuPG 1.x executable. """
-    rdebug('Checking whether {prog} is a GnuPG 1.x executable'
-           .format(prog=prog),
-           cond='repo-add')
-    line = get_gpg_version_line(prog)
-    return line.get('version', '').startswith('1.')
-
-
-def is_gpg_executable(prog):
-    """ Figure out if a program is a GnuPG executable at all. """
-    rdebug('Checking whether {prog} is a GnuPG executable at all'
-           .format(prog=prog),
-           cond='repo-add')
-    return 'version' in get_gpg_version_line(prog)
-
-
-def detect_gpg_program():
-    """ Detect (possibly install) the GnuPG 1.x executable to use. """
-    rdebug('Trying to figure out what GnuPG program to use', cond='repo-add')
-    if is_gpg_1('gpg'):
-        return 'gpg'
-    if not is_gpg_executable('gpg1'):
-        subprocess.check_call([
-            'env', 'DEBIAN_FRONTENT=noninteractive',
-            'apt-get', '-y', 'install', 'gnupg1',
-        ])
-    if is_gpg_1('gpg1'):
-        return 'gpg1'
-    raise Exception('Could not find a GnuPG 1.x executable')
-
-
 class RepoAddRunner:
     """ Add the StorPool repository definitions to the running system. """
     def __init__(self,
-                 config_dir=DEFAULT_APT_CONFIG_DIR,
-                 sources_dir=DEFAULT_APT_SOURCES_DIR,
-                 sources_file=DEFAULT_APT_SOURCES_FILE,
-                 keyring_dir=DEFAULT_APT_KEYRING_DIR,
-                 keyring_file=DEFAULT_APT_KEYRING_FILE):
+                 config_dir=None,
+                 sources_dir=None,
+                 sources_files=None,
+                 keyring_dir=None,
+                 keyring_files=None):
         """ Create a RepoAddRunner object with the specified settings. """
-        self.config_dir = config_dir
-        self.sources_dir = sources_dir
-        self.sources_file = sources_file
-        self.keyring_dir = keyring_dir
-        self.keyring_file = keyring_file
+        self.config_dir = (
+            config_dir if config_dir is not None
+            else DEFAULT_APT_CONFIG_DIR
+        )
+        self.sources_dir = (
+            sources_dir if sources_dir is not None
+            else os.path.join(self.config_dir, DEFAULT_APT_SOURCES_DIR)
+        )
+        self.sources_files = (
+            sources_files if sources_files is not None
+            else [
+                os.path.join(self.sources_dir, fname)
+                for fname in DEFAULT_APT_SOURCES_FILES
+            ]
+        )
+        self.keyring_dir = (
+            keyring_dir if keyring_dir is not None
+            else DEFAULT_KEYRING_DIR
+        )
+        self.keyring_files = (
+            keyring_files if keyring_files is not None
+            else [
+                os.path.join(self.keyring_dir, fname)
+                for fname in DEFAULT_KEYRING_FILES
+            ]
+        )
+        if len(self.keyring_files) != len(self.sources_files):
+            raise Exception('{tname} must be initialized with the same number '
+                            'of source files and keyring files'
+                            .format(tname=type(self).__name__))
 
-    def apt_sources_list(self):
-        """ Get the name of the APT file to store the StorPool repo data. """
-        return '{dir}/{subdir}/{file}'.format(dir=self.config_dir,
-                                              subdir=self.sources_dir,
-                                              file=self.sources_file)
+    def _temp_rendered_file(self, template, destdir, context=None,
+                            b64encoded=False):
+        """ Write out a rendered template to a temporary file. """
+        if context is None:
+            context = {}
 
-    def apt_keyring(self):
-        """ Get the name of the APT file to store the StorPool OpenPGP key. """
-        return '{dir}/{subdir}/{file}'.format(dir=self.config_dir,
-                                              subdir=self.keyring_dir,
-                                              file=self.keyring_file)
+        if b64encoded:
+            encoded = templating.render(
+                source=template,
+                target=None,
+                context=context,
+            )
+            decoded = base64.b64decode(encoded)
+            tempf = tempfile.NamedTemporaryFile(
+                dir=destdir,
+                prefix='.storpool.',
+                suffix='.gpg',
+                mode='wb',
+            )
+            tempf.write(decoded)
+            tempf.flush()
+        else:
+            tempf = tempfile.NamedTemporaryFile(
+                dir=destdir,
+                prefix='.storpool.',
+                suffix='.txt',
+            )
+            templating.render(
+                source=template,
+                target=tempf.name,
+                context=context,
+            )
+        return tempf
+
+    def _compare_and_install(self, template, fname,
+                             context=None, b64encoded=False):
+        with self._temp_rendered_file(
+            template,
+            os.path.dirname(fname),
+            b64encoded=b64encoded,
+            context=context,
+        ) as tempf:
+            rdebug('  - tempf {tempf} for {fname}'
+                   .format(tempf=tempf.name, fname=fname),
+                   cond='repo-add')
+            subprocess.check_call([
+                'install',
+                '-C', '-o', 'root', '-g', 'root', '-m', '644',
+                '--',
+                tempf.name, fname,
+            ])
 
     def key_data(self):
         """ Hardcode the StorPool package signing key. """
@@ -155,139 +161,50 @@ class RepoAddRunner:
         """ Get the StorPool package repository URL from the configuration. """
         return spconfig.m()['storpool_repo_url']
 
-    def apt_file_contents(self, url):
-        """ Get the text that should be put into the APT sources list. """
-        codename = get_version_codename()
-        return {
-            'mandatory': 'deb {url} {name} main'.format(
-                url=url, name=codename),
-            'optional': 'deb-src {url} {name} main'.format(
-                url=url, name=codename),
-        }
-
-    def has_apt_key(self):
-        """ Check whether the local APT installation has our signing key. """
-        rdebug('has_apt_key() invoked', cond='repo-add')
-        current = subprocess.check_output([
-                                           'apt-key',
-                                           'adv',
-                                           '--list-keys',
-                                           '--batch',
-                                           '--with-colons'
-                                          ])
-        kdata = self.key_data()
-        rdebug('- got key data {kdata} and output {output}'
-               .format(kdata=repr(kdata), output=repr(current)))
-        for line in current.decode().split('\n'):
-            rdebug('- line {line}'.format(line=repr(line)))
-            if not line.startswith(kdata):
-                continue
-            rdebug('  - ours?')
-            fields = line.split(':')
-            rdebug('  - checking {flds}'.format(flds=repr(fields)))
-            expiry = fields[6]
-            exp_fields = expiry.split('-')
-            rdebug('  - and {flds}'.format(flds=repr(exp_fields)))
-
-            try:
-                if len(exp_fields) == 1:
-                    exp_time = datetime.datetime.fromtimestamp(
-                        int(exp_fields[0]))
-                elif len(exp_fields) == 3:
-                    exp_time = datetime.datetime(
-                        year=int(exp_fields[0]),
-                        month=int(exp_fields[1]),
-                        day=int(exp_fields[2]),
-                    )
-            except Exception as err:
-                rdebug('- could not parse {line}: {etype}: {err}'
-                       .format(line=repr(line),
-                               etype=type(err).__name__,
-                               err=repr(err)))
-                continue
-            rdebug('  - exp_time {exp}'.format(exp=exp_time))
-
-            if exp_time > datetime.datetime.now():
-                rdebug('  - found one!')
-                return True
-            rdebug('  - nah...')
-
-        rdebug('- nothing found')
-        return False
-
-    def has_apt_repo(self):
-        """ Check whether the local APT installation has our repository. """
-        rdebug('has_apt_repo() invoked')
-        filename = self.apt_sources_list()
-        if not os.path.isfile(filename):
-            return False
-
-        contents = self.apt_file_contents(self.repo_url())
-        with open(filename, mode='r') as f:
-            found_mandatory = False
-            for line in map(lambda s: s.strip(), f.readlines()):
-                if line == contents['mandatory']:
-                    found_mandatory = True
-                elif contents['optional'] not in line:
-                    return False
-            return found_mandatory
-
     def install_apt_key(self):
         """ Add the StorPool package signing key to the local APT setup. """
         rdebug('install_apt_key() invoked', cond='repo-add')
-        keyfile = '{charm}/templates/{fname}'.format(charm=hookenv.charm_dir(),
-                                                     fname='storpool-maas.key')
-        filename = self.apt_keyring()
-        dirname = os.path.dirname(filename)
-        if not os.path.isdir(dirname):
-            rdebug('- creating the {dir} directory first'.format(dir=dirname),
+        for fname in self.keyring_files:
+            template = '{base}.txt'.format(base=os.path.basename(fname))
+            self._compare_and_install(template, fname, b64encoded=True)
+
+        obs_name = os.path.join(
+            self.config_dir, 'trusted.gpg.d', 'storpool-maas.key')
+        if os.path.exists(obs_name):
+            rdebug('removing the obsolete {name}'.format(name=obs_name),
                    cond='repo-add')
-            os.mkdir(dirname, 0o755)
-        rdebug('about to invoke gpg import into {keyfile}'
-               .format(keyfile=keyfile),
-               cond='repo-add')
-        gpg_prog = detect_gpg_program()
-        rdebug('Detected GnuPG 1.x program {gpg}'.format(gpg=gpg_prog),
-               cond='repo-add')
-        with tempfile.TemporaryDirectory() as tempd:
-            subprocess.check_call([
-                'env', 'GNUPGHOME={tempd}'.format(tempd=tempd),
-                gpg_prog, '--no-default-keyring', '--keyring', filename,
-                '--import', keyfile
-            ])
-        os.chmod(filename, 0o644)
+            os.unlink(obs_name)
 
     def install_apt_repo(self):
         """ Add the StorPool package repository to the local APT setup. """
         rdebug('install_apt_repo() invoked', cond='repo-add')
 
-        contents = self.apt_file_contents(self.repo_url())
-        text = '{mandatory}\n# {optional}\n'.format(**contents)
-        filename = self.apt_sources_list()
-        rdebug('creating the {fname} file'.format(fname=filename),
-               cond='repo-add')
-        rdebug('contents: {text}'.format(text=text), cond='repo-add')
-        dirname = os.path.dirname(filename)
-        if not os.path.isdir(dirname):
-            rdebug('- creating the {dir} directory first'.format(dir=dirname),
+        codename = get_version_codename()
+        for fname, keyfile in zip(self.sources_files, self.keyring_files):
+            template = os.path.basename(fname)
+            self._compare_and_install(
+                template,
+                fname,
+                context={
+                    'repo_url': self.repo_url(),
+                    'codename': codename,
+                    'keyring': keyfile,
+                },
+            )
+
+        obs_name = os.path.join(
+            self.sources_dir, 'storpool-maas.list')
+        if os.path.exists(obs_name):
+            rdebug('removing the obsolete {name}'.format(name=obs_name),
                    cond='repo-add')
-            os.mkdir(dirname, mode=0o755)
-        with tempfile.NamedTemporaryFile(dir=dirname,
-                                         mode='w+t',
-                                         prefix='.storpool-maas.',
-                                         suffix='.list',
-                                         delete=False) as tempf:
-            print(text, file=tempf, end='', flush=True)
-            os.chmod(tempf.name, 0o644)
-            os.rename(tempf.name, filename)
+            os.unlink(obs_name)
 
     def do_install_apt_key(self):
         """ Check and, if necessary, install our package signing key. """
         rdebug('install-apt-key invoked')
         spstatus.npset('maintenance', 'checking for the APT key')
 
-        if not self.has_apt_key():
-            self.install_apt_key()
+        self.install_apt_key()
 
         rdebug('install-apt-key seems fine')
         spstatus.npset('maintenance', '')
@@ -297,8 +214,7 @@ class RepoAddRunner:
         rdebug('install-apt-repo invoked')
         spstatus.npset('maintenance', 'checking for the APT repository')
 
-        if not self.has_apt_repo():
-            self.install_apt_repo()
+        self.install_apt_repo()
 
         rdebug('install-apt-repo seems fine')
         spstatus.npset('maintenance', '')
@@ -353,7 +269,7 @@ def stop(runner=None):
 
     if runner is None:
         runner = RepoAddRunner()
-    for fname in (runner.apt_sources_list(), runner.apt_keyring()):
+    for fname in runner.sources_files + runner.keyring_files:
         if os.path.isfile(fname):
             rdebug('- trying to remove {name}'.format(name=fname),
                    cond='repo-add')
