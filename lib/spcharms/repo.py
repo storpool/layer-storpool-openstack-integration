@@ -18,19 +18,22 @@ class StorPoolRepoException(Exception):
     """
     Indicate spcharms.repo errors; no additional error information.
     """
+
     pass
 
 
 re_policy = {
-    'installed': re.compile(r'\s* Installed: \s+ (?P<version> \S+ ) \s* $',
-                            re.X),
-    'candidate': re.compile(r'\s* Candidate: \s+ (?P<version> \S+ ) \s* $',
-                            re.X),
+    "installed": re.compile(
+        r"\s* Installed: \s+ (?P<version> \S+ ) \s* $", re.X
+    ),
+    "candidate": re.compile(
+        r"\s* Candidate: \s+ (?P<version> \S+ ) \s* $", re.X
+    ),
 }
 
 
 def rdebug(s, cond=None):
-    sputils.rdebug(s, prefix='repo', cond=cond)
+    sputils.rdebug(s, prefix="repo", cond=cond)
 
 
 def apt_pkg_policy(names):
@@ -42,8 +45,8 @@ def apt_pkg_policy(names):
     for pkg in names:
         pres = {}
         bad = False
-        pb = subprocess.check_output(['apt-cache', 'policy', '--', pkg])
-        for line in pb.decode().split('\n'):
+        pb = subprocess.check_output(["apt-cache", "policy", "--", pkg])
+        for line in pb.decode().split("\n"):
             for pol in re_policy:
                 m = re_policy[pol].match(line)
                 if not m:
@@ -51,7 +54,7 @@ def apt_pkg_policy(names):
                 if pol in pres:
                     bad = True
                     break
-                pres[pol] = m.groupdict()['version']
+                pres[pol] = m.groupdict()["version"]
             if bad:
                 break
 
@@ -59,7 +62,7 @@ def apt_pkg_policy(names):
             if pol not in pres:
                 bad = True
                 break
-            elif pres[pol] == '(none)':
+            elif pres[pol] == "(none)":
                 pres[pol] = None
 
         if bad:
@@ -77,40 +80,51 @@ def pkgs_to_install(requested, policy):
     """
     to_install = []
 
-    rdebug('Determining which packages to install/upgrade', cond='repo-which')
+    rdebug("Determining which packages to install/upgrade", cond="repo-which")
     spe = sperror.StorPoolPackageInstallException
     for p in policy:
         ver = policy[p]
         if ver is None:
-            raise spe([p], 'could not obtain APT policy information')
+            raise spe([p], "could not obtain APT policy information")
 
         req = requested[p]
-        rdebug('- {p}: requested {req} installed {inst} candidate {cand}'
-               .format(p=p, req=req,
-                       inst=ver['installed'], cand=ver['candidate']),
-               cond='repo-which')
-        if ver['installed'] is not None and req == ver['installed']:
-            rdebug('  - exact version requested, already installed',
-                   cond='repo-which')
+        rdebug(
+            "- {p}: requested {req} installed {inst} candidate {cand}".format(
+                p=p, req=req, inst=ver["installed"], cand=ver["candidate"]
+            ),
+            cond="repo-which",
+        )
+        if ver["installed"] is not None and req == ver["installed"]:
+            rdebug(
+                "  - exact version requested, already installed",
+                cond="repo-which",
+            )
             continue
-        elif ver['candidate'] is None:
-            raise spe([p], 'not available in the repositories')
-        elif req == '*' and ver['candidate'] == ver['installed']:
-            rdebug('  - best candidate already installed',
-                   cond='repo-which')
+        elif ver["candidate"] is None:
+            raise spe([p], "not available in the repositories")
+        elif req == "*" and ver["candidate"] == ver["installed"]:
+            rdebug("  - best candidate already installed", cond="repo-which")
             continue
-        elif req != '*' and req != ver['candidate']:
-            raise spe([p],
-                      'the {req} version is not available in '
-                      'the repositories, we have {cand} instead'
-                      .format(req=req, cand=ver['candidate']))
+        elif req != "*" and req != ver["candidate"]:
+            raise spe(
+                [p],
+                "the {req} version is not available in "
+                "the repositories, we have {cand} instead".format(
+                    req=req, cand=ver["candidate"]
+                ),
+            )
 
-        rdebug('  - apparently we need to install or upgrade it',
-               cond='repo-which')
+        rdebug(
+            "  - apparently we need to install or upgrade it",
+            cond="repo-which",
+        )
         to_install.append(p)
 
-    rdebug('We need to install/upgrade {ln} packages: {lst}'
-           .format(ln=len(to_install), lst=' '.join(sorted(to_install))))
+    rdebug(
+        "We need to install/upgrade {ln} packages: {lst}".format(
+            ln=len(to_install), lst=" ".join(sorted(to_install))
+        )
+    )
     return to_install
 
 
@@ -119,44 +133,53 @@ def apt_install(pkgs):
     Install the specified packages and return a list of all the packages that
     were installed or upgraded along with them.
     """
-    previous_b = subprocess.check_output([
-        'dpkg-query', '-W', '--showformat',
-        '${Package}\t${Version}\t${Status}\n'
-    ])
-    previous = dict(map(
-        lambda d: (d[0], d[1]),
-        filter(
-            lambda d: len(d) == 3 and d[2].startswith('install'),
-            map(
-                lambda s: s.split('\t'),
-                previous_b.decode().split('\n')
-            )
+    previous_b = subprocess.check_output(
+        [
+            "dpkg-query",
+            "-W",
+            "--showformat",
+            "${Package}\t${Version}\t${Status}\n",
+        ]
+    )
+    previous = dict(
+        map(
+            lambda d: (d[0], d[1]),
+            filter(
+                lambda d: len(d) == 3 and d[2].startswith("install"),
+                map(lambda s: s.split("\t"), previous_b.decode().split("\n")),
+            ),
         )
-    ))
+    )
 
-    cmd = ['apt-get', 'install', '-y', '--no-install-recommends', '--']
+    cmd = ["apt-get", "install", "-y", "--no-install-recommends", "--"]
     cmd.extend(pkgs)
     subprocess.check_call(cmd)
 
-    current_b = subprocess.check_output([
-        'dpkg-query', '-W', '--showformat',
-        '${Package}\t${Version}\t${Status}\n'
-    ])
-    current = dict(map(
-        lambda d: (d[0], d[1]),
-        filter(
-            lambda d: len(d) == 3 and d[2].startswith('install'),
-            map(
-                lambda s: s.split('\t'),
-                current_b.decode().split('\n')
-            )
+    current_b = subprocess.check_output(
+        [
+            "dpkg-query",
+            "-W",
+            "--showformat",
+            "${Package}\t${Version}\t${Status}\n",
+        ]
+    )
+    current = dict(
+        map(
+            lambda d: (d[0], d[1]),
+            filter(
+                lambda d: len(d) == 3 and d[2].startswith("install"),
+                map(lambda s: s.split("\t"), current_b.decode().split("\n")),
+            ),
         )
-    ))
+    )
 
-    newly_installed = list(filter(
-        lambda name: name not in previous or previous[name] != current[name],
-        current.keys()
-    ))
+    newly_installed = list(
+        filter(
+            lambda name: name not in previous
+            or previous[name] != current[name],
+            current.keys(),
+        )
+    )
     return newly_installed
 
 
@@ -169,8 +192,10 @@ def install_packages(requested):
     try:
         policy = apt_pkg_policy(requested.keys())
     except Exception as e:
-        raise spe(requested.keys(),
-                  'Could not query the APT policy: {err}'.format(err=e))
+        raise spe(
+            requested.keys(),
+            "Could not query the APT policy: {err}".format(err=e),
+        )
 
     to_install = pkgs_to_install(requested, policy)
     if to_install:
@@ -184,7 +209,8 @@ def charm_install_list_file():
     """
     Return the name of the file used for keeping track of installed packages.
     """
-    return '/var/lib/storpool/install-charms.json'
+    return "/var/lib/storpool/install-charms.json"
+
 
 # The part of the data structure that we care about:
 # {
@@ -210,12 +236,12 @@ def record_packages(layer_name, names, charm_name=None):
     if charm_name is None:
         charm_name = hookenv.charm_name()
 
-    if not os.path.isdir('/var/lib/storpool'):
-        os.mkdir('/var/lib/storpool', mode=0o700)
-    with open(charm_install_list_file(), mode='at'):
+    if not os.path.isdir("/var/lib/storpool"):
+        os.mkdir("/var/lib/storpool", mode=0o700)
+    with open(charm_install_list_file(), mode="at"):
         # Just making sure the file exists so we can open it as r+t.
         pass
-    with open(charm_install_list_file(), mode='r+t') as listf:
+    with open(charm_install_list_file(), mode="r+t") as listf:
         fcntl.lockf(listf, fcntl.LOCK_EX)
 
         # OK, we're ready to go now
@@ -223,25 +249,26 @@ def record_packages(layer_name, names, charm_name=None):
         if len(contents) > 0:
             data = json.loads(contents)
         else:
-            data = {'charms': {}}
+            data = {"charms": {}}
 
-        if charm_name not in data['charms']:
-            data['charms'][charm_name] = {'layers': {}}
-        layers = data['charms'][charm_name]['layers']
+        if charm_name not in data["charms"]:
+            data["charms"][charm_name] = {"layers": {}}
+        layers = data["charms"][charm_name]["layers"]
 
         if layer_name not in layers:
-            layers[layer_name] = {'packages': []}
+            layers[layer_name] = {"packages": []}
         layer = layers[layer_name]
 
-        pset = set(layer['packages'])
+        pset = set(layer["packages"])
         cset = set.union(pset, set(names))
-        layer['packages'] = list(sorted(cset))
+        layer["packages"] = list(sorted(cset))
 
         # Hm, any packages that no longer need to be uninstalled?
-        if 'packages' not in data:
-            data['packages'] = {'remove': []}
-        data['packages']['remove'] = \
-            list(sorted(set(data['packages']['remove']).difference(cset)))
+        if "packages" not in data:
+            data["packages"] = {"remove": []}
+        data["packages"]["remove"] = list(
+            sorted(set(data["packages"]["remove"]).difference(cset))
+        )
 
         # Right, so let's write it back
         listf.seek(0)
@@ -259,7 +286,7 @@ def unrecord_packages(layer_name, charm_name=None):
         charm_name = hookenv.charm_name()
 
     try:
-        with open(charm_install_list_file(), mode='r+t') as listf:
+        with open(charm_install_list_file(), mode="r+t") as listf:
             fcntl.lockf(listf, fcntl.LOCK_EX)
 
             # ...and it must contain valid JSON?
@@ -267,18 +294,18 @@ def unrecord_packages(layer_name, charm_name=None):
 
             packages = set()
             has_layer = False
-            has_charm = charm_name in data['charms']
+            has_charm = charm_name in data["charms"]
             changed = False
             if has_charm:
-                layers = data['charms'][charm_name]['layers']
+                layers = data["charms"][charm_name]["layers"]
                 has_layer = layer_name in layers
                 if has_layer:
                     layer = layers[layer_name]
-                    packages = set(layer['packages'])
+                    packages = set(layer["packages"])
                     del layers[layer_name]
                     changed = True
                     if not layers:
-                        del data['charms'][charm_name]
+                        del data["charms"][charm_name]
 
             # Right, so let's write it back if needed
             if changed:
@@ -287,13 +314,13 @@ def unrecord_packages(layer_name, charm_name=None):
                 listf.truncate()
 
             changed = False
-            if 'packages' not in data:
-                data['packages'] = {'remove': []}
-            try_remove = set(data['packages']['remove']).union(packages)
-            for cdata in data['charms'].values():
-                for layer in cdata['layers'].values():
-                    try_remove = try_remove.difference(set(layer['packages']))
-            if try_remove != set(data['packages']['remove']):
+            if "packages" not in data:
+                data["packages"] = {"remove": []}
+            try_remove = set(data["packages"]["remove"]).union(packages)
+            for cdata in data["charms"].values():
+                for layer in cdata["layers"].values():
+                    try_remove = try_remove.difference(set(layer["packages"]))
+            if try_remove != set(data["packages"]["remove"]):
                 changed = True
 
             removed = set()
@@ -301,23 +328,32 @@ def unrecord_packages(layer_name, charm_name=None):
                 removed_now = set()
 
                 # Sigh... don't we just love special cases...
-                pkgs = set(['libwww-perl', 'liblwp-protocol-https-perl'])
+                pkgs = set(["libwww-perl", "liblwp-protocol-https-perl"])
                 if pkgs.issubset(try_remove):
-                    if subprocess.call(['dpkg', '-r', '--dry-run', '--'] +
-                                       list(pkgs),
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE) == 0:
-                        subprocess.call(['dpkg', '--purge', '--'] + list(pkgs))
+                    if (
+                        subprocess.call(
+                            ["dpkg", "-r", "--dry-run", "--"] + list(pkgs),
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                        )
+                        == 0
+                    ):
+                        subprocess.call(["dpkg", "--purge", "--"] + list(pkgs))
                         removed_now = removed_now.union(pkgs)
                         changed = True
 
                 # Now go for them all
                 for pkg in try_remove:
-                    if subprocess.call(['dpkg', '-r', '--dry-run', '--', pkg],
-                                       stdout=subprocess.PIPE,
-                                       stderr=subprocess.PIPE) != 0:
+                    if (
+                        subprocess.call(
+                            ["dpkg", "-r", "--dry-run", "--", pkg],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                        )
+                        != 0
+                    ):
                         continue
-                    subprocess.call(['dpkg', '--purge', '--', pkg])
+                    subprocess.call(["dpkg", "--purge", "--", pkg])
                     removed_now.add(pkg)
                     changed = True
 
@@ -326,8 +362,9 @@ def unrecord_packages(layer_name, charm_name=None):
                     try_remove = try_remove.difference(removed_now)
                 else:
                     break
-            data['packages']['remove'] = \
-                list(sorted(try_remove.difference(removed)))
+            data["packages"]["remove"] = list(
+                sorted(try_remove.difference(removed))
+            )
 
             # Let's write it back again if needed
             if changed:
@@ -342,8 +379,5 @@ def list_package_files(name):
     """
     List the files installed by the specified package.
     """
-    files_b = subprocess.check_output(['dpkg', '-L', '--', name])
-    return sorted(filter(
-        lambda s: len(s) > 0,
-        files_b.decode().split('\n')
-    ))
+    files_b = subprocess.check_output(["dpkg", "-L", "--", name])
+    return sorted(filter(lambda s: len(s) > 0, files_b.decode().split("\n")))

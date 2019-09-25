@@ -51,8 +51,10 @@ class QuasiConfig(object):
         if initializing_config == self:
             return super(QuasiConfig, self).__setattr__(name, value)
 
-        raise AttributeError('Cannot override the QuasiConfig '
-                             '"{name}" attribute'.format(name=name))
+        raise AttributeError(
+            "Cannot override the QuasiConfig "
+            '"{name}" attribute'.format(name=name)
+        )
 
     def get_dict(self):
         d = dict(self.config)
@@ -72,9 +74,9 @@ def get_cached_dict():
         return cached_config
 
     res = {}
-    lines_b = subprocess.check_output(['/usr/sbin/storpool_confshow'])
-    for line in lines_b.decode().split('\n'):
-        fields = line.split('=', 1)
+    lines_b = subprocess.check_output(["/usr/sbin/storpool_confshow"])
+    for line in lines_b.decode().split("\n"):
+        fields = line.split("=", 1)
         if len(fields) < 2:
             continue
         res[fields[0]] = fields[1]
@@ -127,8 +129,8 @@ def m():
     if cached_meta is None:
         mm = unitdata.kv().get(kvdata.KEY_META_CONFIG, None)
         if mm is None:
-            raise error.StorPoolNoConfigException(['*'])
-        elif mm == 'None':
+            raise error.StorPoolNoConfigException(["*"])
+        elif mm == "None":
             cached_meta = mm
         else:
             cfg = QuasiConfig()
@@ -136,7 +138,7 @@ def m():
                 cfg.r_set(key, value, True)
             cached_meta = cfg
 
-    if cached_meta == 'None':
+    if cached_meta == "None":
         return hookenv.config()
     return cached_meta
 
@@ -149,7 +151,7 @@ def set_meta_config(data):
     """
     # Store the new data into the unit's database.
     if data is None:
-        store = 'None'
+        store = "None"
     else:
         store = data
     unitdata.kv().set(kvdata.KEY_META_CONFIG, store)
@@ -158,7 +160,7 @@ def set_meta_config(data):
     global cached_meta
     cached_meta = None
     m()
-    reactive.set_state('storpool-helper.config-set')
+    reactive.set_state("storpool-helper.config-set")
 
 
 def unset_meta_config():
@@ -168,7 +170,7 @@ def unset_meta_config():
     unitdata.kv().unset(kvdata.KEY_META_CONFIG)
     global cached_meta
     cached_meta = None
-    reactive.remove_state('storpool-helper.config-set')
+    reactive.remove_state("storpool-helper.config-set")
 
 
 def get_meta_generation():

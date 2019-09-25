@@ -11,27 +11,24 @@ import unittest
 
 import mock
 
-lib_path = os.path.realpath('lib')
+lib_path = os.path.realpath("lib")
 if lib_path not in sys.path:
     sys.path.insert(0, lib_path)
 
 from spcharms import config as spconfig
 
 
-test_config = {
-    'simple': 'string',
-    'integer': '42',
-}
+test_config = {"simple": "string", "integer": "42"}
 
-test_config_string = ''.join(map(lambda i: '{var}={val}\n'.format(var=i[0],
-                                                                  val=i[1]),
-                                 test_config.items()))
-test_config_bytes = test_config_string.encode('UTF-8')
+test_config_string = "".join(
+    map(
+        lambda i: "{var}={val}\n".format(var=i[0], val=i[1]),
+        test_config.items(),
+    )
+)
+test_config_bytes = test_config_string.encode("UTF-8")
 
-test_other_config = {
-    'something': 'else',
-    'but': 'really',
-}
+test_other_config = {"something": "else", "but": "really"}
 
 
 class TestConfig(unittest.TestCase):
@@ -42,7 +39,7 @@ class TestConfig(unittest.TestCase):
         super(TestConfig, self).setUp()
         spconfig.cached_config = None
 
-    @mock.patch('subprocess.check_output')
+    @mock.patch("subprocess.check_output")
     def do_test_get_dict(self, get_dict, check_output):
         """
         Parse some real storpool_confshow-like output.
@@ -53,7 +50,7 @@ class TestConfig(unittest.TestCase):
         # Let it try to run storpool_confshow
         check_output.return_value = test_config_bytes
         res = get_dict()
-        check_output.assert_called_once_with(['/usr/sbin/storpool_confshow'])
+        check_output.assert_called_once_with(["/usr/sbin/storpool_confshow"])
 
         # Make sure it parsed our configuration data correctly
         self.assertEqual(res, test_config)
@@ -61,7 +58,7 @@ class TestConfig(unittest.TestCase):
 
         # Let's hope it doesn't run storpool_confshow any more
         res = get_dict()
-        check_output.assert_called_once_with(['/usr/sbin/storpool_confshow'])
+        check_output.assert_called_once_with(["/usr/sbin/storpool_confshow"])
 
         # But it still returns the same data
         self.assertEqual(res, test_config)
@@ -70,7 +67,7 @@ class TestConfig(unittest.TestCase):
         # Okay, now make it return different data
         spconfig.cached_config = test_other_config
         res = get_dict()
-        check_output.assert_called_once_with(['/usr/sbin/storpool_confshow'])
+        check_output.assert_called_once_with(["/usr/sbin/storpool_confshow"])
         self.assertEqual(res, test_other_config)
         self.assertEqual(spconfig.cached_config, test_other_config)
 
@@ -78,7 +75,7 @@ class TestConfig(unittest.TestCase):
         spconfig.cached_config = None
         res = get_dict()
         self.assertEqual(check_output.call_count, 2)
-        check_output.assert_called_with(['/usr/sbin/storpool_confshow'])
+        check_output.assert_called_with(["/usr/sbin/storpool_confshow"])
         self.assertEqual(res, test_config)
         self.assertEqual(spconfig.cached_config, test_config)
 
@@ -94,7 +91,7 @@ class TestConfig(unittest.TestCase):
         """
         self.do_test_get_dict(spconfig.get_dict)
 
-    @mock.patch('subprocess.check_output')
+    @mock.patch("subprocess.check_output")
     def test_drop_cache(self, check_output):
         """
         Make sure drop_cache() actually, well, drops the cache.
@@ -105,7 +102,7 @@ class TestConfig(unittest.TestCase):
         # Let it try to run storpool_confshow
         check_output.return_value = test_config_bytes
         res = spconfig.get_cached_dict()
-        check_output.assert_called_once_with(['/usr/sbin/storpool_confshow'])
+        check_output.assert_called_once_with(["/usr/sbin/storpool_confshow"])
 
         # Make sure it parsed our configuration data correctly
         self.assertEqual(res, test_config)

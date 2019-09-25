@@ -14,7 +14,7 @@ def get():
     st = unitdata.kv().get(kvdata.KEY_SPSTATUS, default=None)
     if st is None:
         return None
-    return st.split(':', 1)
+    return st.split(":", 1)
 
 
 def set(status, msg):
@@ -25,8 +25,8 @@ def set(status, msg):
     error (see the `reset_unless_error()` function below); the unit status
     itself is set to "maintenance" instead.
     """
-    hookenv.status_set(status if status != 'error' else 'maintenance', msg)
-    unitdata.kv().set(kvdata.KEY_SPSTATUS, status + ':' + msg)
+    hookenv.status_set(status if status != "error" else "maintenance", msg)
+    unitdata.kv().set(kvdata.KEY_SPSTATUS, status + ":" + msg)
 
 
 def reset():
@@ -41,9 +41,9 @@ def reset_unless_error():
     Remove a persistent status unless it signifies an error.
     """
     st = get()
-    if st is None or st[0] != 'error':
+    if st is None or st[0] != "error":
         reset()
-        hookenv.status_set('maintenance', '')
+        hookenv.status_set("maintenance", "")
 
 
 def npset(status, message):
@@ -67,6 +67,6 @@ def reset_if_allowed(name):
     Reset the persistent status if the layer with the specified name has
     previously been set as the one that is allowed to.
     """
-    stored = unitdata.kv().get(kvdata.KEY_SPSTATUS, '')
+    stored = unitdata.kv().get(kvdata.KEY_SPSTATUS, "")
     if name == stored:
         reset()

@@ -12,7 +12,7 @@ import unittest
 
 import mock
 
-root_path = os.path.realpath('.')
+root_path = os.path.realpath(".")
 if root_path not in sys.path:
     sys.path.insert(0, root_path)
 
@@ -73,8 +73,10 @@ class MockConfig(object):
         if initializing_config == self:
             return super(MockConfig, self).__setattr__(name, value)
 
-        raise AttributeError('Cannot override the MockConfig '
-                             '"{name}" attribute'.format(name=name))
+        raise AttributeError(
+            "Cannot override the MockConfig "
+            '"{name}" attribute'.format(name=name)
+        )
 
 
 r_config = MockConfig()
@@ -84,19 +86,19 @@ spconfig.m = lambda: r_config
 
 from spcharms.run import storpool_repo_add as testee
 
-REPO_URL = 'http://jrl:no-idea@nonexistent.storpool.example.com/'
+REPO_URL = "http://jrl:no-idea@nonexistent.storpool.example.com/"
 
 LINES_REAL = [
-    'deb http://bg.archive.ubuntu.com/ubuntu/ xenial-updates main restricted',
-    'deb-src http://bg.archive.ubuntu.com/ubuntu/ '
-    'xenial-updates main restricted',
+    "deb http://bg.archive.ubuntu.com/ubuntu/ xenial-updates main restricted",
+    "deb-src http://bg.archive.ubuntu.com/ubuntu/ "
+    "xenial-updates main restricted",
 ]
 
 LINES_OBSOLETE = [
-    'deb https://debian.ringlet.net/storpool-juju/ xenial main',
-    'deb http://repo.storpool.com/storpool-maas/ xenial main',
-    'deb http://foo:bar@repo.storpool.com/storpool-maas/ xenial main',
-    'deb https://foo:bar@repo.storpool.com/storpool-maas/ xenial main',
+    "deb https://debian.ringlet.net/storpool-juju/ xenial main",
+    "deb http://repo.storpool.com/storpool-maas/ xenial main",
+    "deb http://foo:bar@repo.storpool.com/storpool-maas/ xenial main",
+    "deb https://foo:bar@repo.storpool.com/storpool-maas/ xenial main",
 ]
 
 
@@ -104,6 +106,7 @@ class TestStorPoolRepoAdd(unittest.TestCase):
     """
     Test various aspects of the storpool-repo-add layer.
     """
+
     def setUp(self):
         """
         Clean up the reactive states information between tests.
@@ -111,15 +114,14 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         super(TestStorPoolRepoAdd, self).setUp()
         r_config.r_clear_config()
         sputils.err.side_effect = lambda *args: self.fail_on_err(*args)
-        self.tempdir = tempfile.TemporaryDirectory(prefix='storpool-repo-add.')
+        self.tempdir = tempfile.TemporaryDirectory(prefix="storpool-repo-add.")
 
         apt_dir = "{base}/apt".format(base=self.tempdir.name)
         keyring_dir = "{base}/keyrings".format(base=self.tempdir.name)
         os.mkdir(apt_dir, mode=0o700)
         os.mkdir(keyring_dir, mode=0o700)
         self.runner = testee.RepoAddRunner(
-            config_dir=apt_dir,
-            keyring_dir=keyring_dir,
+            config_dir=apt_dir, keyring_dir=keyring_dir
         )
 
     def tearDown(self):
@@ -127,12 +129,12 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         Remove the temporary directory created by the setUp() method.
         """
         super(TestStorPoolRepoAdd, self).tearDown()
-        if 'tempdir' in dir(self) and self.tempdir is not None:
+        if "tempdir" in dir(self) and self.tempdir is not None:
             self.tempdir.cleanup()
             self.tempdir = None
 
     def fail_on_err(self, msg):
-        self.fail('sputils.err() invoked: {msg}'.format(msg=msg))
+        self.fail("sputils.err() invoked: {msg}".format(msg=msg))
 
     def check_keydata(self):
         """
@@ -140,8 +142,8 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         identify the StorPool MAAS repository key.
         """
         keydata = self.runner.key_data()
-        self.assertTrue(keydata.startswith('pub:'))
-        self.assertGreater(len(keydata.split(':')), 4)
+        self.assertTrue(keydata.startswith("pub:"))
+        self.assertGreater(len(keydata.split(":")), 4)
         return keydata
 
     def check_keyfiles(self):
@@ -153,10 +155,12 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         for fname in self.runner.keyring_files:
             self.assertEqual(
                 self.tempdir.name,
-                os.path.commonpath([self.tempdir.name, fname]))
+                os.path.commonpath([self.tempdir.name, fname]),
+            )
             self.assertEqual(
                 self.runner.keyring_dir,
-                os.path.commonpath([self.runner.keyring_dir, fname]))
+                os.path.commonpath([self.runner.keyring_dir, fname]),
+            )
             res.append(fname)
         return res
 
@@ -167,20 +171,31 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         """
         checked = False
         for keyfile in keyfiles:
-            if '-maas-' not in keyfile:
+            if "-maas-" not in keyfile:
                 continue
             checked = True
-            lines = subprocess.check_output([
-                'gpg', '--list-keys', '--batch', '--with-colons',
-                '--no-default-keyring', '--keyring', keyfile
-            ]).decode().split('\n')
+            lines = (
+                subprocess.check_output(
+                    [
+                        "gpg",
+                        "--list-keys",
+                        "--batch",
+                        "--with-colons",
+                        "--no-default-keyring",
+                        "--keyring",
+                        keyfile,
+                    ]
+                )
+                .decode()
+                .split("\n")
+            )
             found = [line for line in lines if line.startswith(keydata)]
             self.assertTrue(found)
 
         self.assertTrue(checked)
 
-    @mock.patch('charmhelpers.core.hookenv.config', new=lambda: {})
-    @mock.patch('charmhelpers.core.hookenv.charm_dir')
+    @mock.patch("charmhelpers.core.hookenv.config", new=lambda: {})
+    @mock.patch("charmhelpers.core.hookenv.charm_dir")
     def test_apt_key(self, charm_dir):
         """
         Test the routines that let APT trust the StorPool key.
@@ -188,14 +203,12 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         charm_dir.return_value = os.getcwd()
 
         obsolete = os.path.join(
-            self.tempdir.name,
-            'apt',
-            'trusted.gpg.d',
-            'storpool-maas.key')
+            self.tempdir.name, "apt", "trusted.gpg.d", "storpool-maas.key"
+        )
         if not os.path.exists(os.path.dirname(obsolete)):
             os.mkdir(os.path.dirname(obsolete), mode=0o700)
-        with open(obsolete, mode='w', encoding='UTF-8') as obsf:
-            print('hello', file=obsf)
+        with open(obsolete, mode="w", encoding="UTF-8") as obsf:
+            print("hello", file=obsf)
 
         keydata = self.check_keydata()
         keyfiles = self.check_keyfiles()
@@ -225,10 +238,12 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         for fname in self.runner.sources_files:
             self.assertEqual(
                 self.tempdir.name,
-                os.path.commonpath([self.tempdir.name, fname]))
+                os.path.commonpath([self.tempdir.name, fname]),
+            )
             self.assertEqual(
                 self.runner.config_dir,
-                os.path.commonpath([self.runner.config_dir, fname]))
+                os.path.commonpath([self.runner.config_dir, fname]),
+            )
             res.append(fname)
         return res
 
@@ -236,39 +251,51 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         """ Actually check the contents of the sources list file. """
         checked = False
         for listfile in listfiles:
-            if '-maas' not in listfile:
+            if "-maas" not in listfile:
                 continue
             checked = True
-            lines = open(listfile, mode='r', encoding='us-ascii').readlines()
+            lines = open(listfile, mode="r", encoding="us-ascii").readlines()
             self.assertNotEqual(
                 [],
-                [line for line in lines
-                 if line.startswith('Types:') and 'deb' in line.split()])
+                [
+                    line
+                    for line in lines
+                    if line.startswith("Types:") and "deb" in line.split()
+                ],
+            )
             self.assertNotEqual(
                 [],
-                [line for line in lines
-                 if line.startswith('Types:') and 'deb-src' in line.split()])
+                [
+                    line
+                    for line in lines
+                    if line.startswith("Types:") and "deb-src" in line.split()
+                ],
+            )
             self.assertNotEqual(
                 [],
-                [line for line in lines
-                 if line.startswith('URIs:') and REPO_URL in line])
+                [
+                    line
+                    for line in lines
+                    if line.startswith("URIs:") and REPO_URL in line
+                ],
+            )
 
         self.assertTrue(checked)
 
-    @mock.patch('charmhelpers.core.hookenv.config', new=lambda: {})
-    @mock.patch('charmhelpers.core.hookenv.charm_dir')
+    @mock.patch("charmhelpers.core.hookenv.config", new=lambda: {})
+    @mock.patch("charmhelpers.core.hookenv.charm_dir")
     def test_sources_list(self, charm_dir):
         """
         Test the routines that let APT look at the StorPool repository.
         """
         charm_dir.return_value = os.getcwd()
-        r_config.r_set('storpool_repo_url', REPO_URL, True)
+        r_config.r_set("storpool_repo_url", REPO_URL, True)
 
-        obsolete = os.path.join(self.runner.sources_dir, 'storpool-maas.list')
+        obsolete = os.path.join(self.runner.sources_dir, "storpool-maas.list")
         if not os.path.exists(os.path.dirname(obsolete)):
             os.mkdir(os.path.dirname(obsolete), mode=0o700)
-        with open(obsolete, mode='w', encoding='UTF-8') as obsf:
-            print('hello', file=obsf)
+        with open(obsolete, mode="w", encoding="UTF-8") as obsf:
+            print("hello", file=obsf)
 
         listfiles = self.check_sources_list()
         for listfile in listfiles:
@@ -292,12 +319,13 @@ class TestStorPoolRepoAdd(unittest.TestCase):
         """
         Test the package install exception.
         """
-        names = ['storpool-beacon', 'storpool-block', 'txn']
-        cause = KeyError('weirdness')
+        names = ["storpool-beacon", "storpool-block", "txn"]
+        cause = KeyError("weirdness")
         e = sperror.StorPoolPackageInstallException(names, cause)
         self.assertIsInstance(e, sperror.StorPoolPackageInstallException)
         self.assertIsInstance(e, Exception)
         self.assertEqual(e.names, names)
         self.assertEqual(e.cause, cause)
-        self.assertRegex(str(e),
-                         '.*storpool-beacon storpool-block txn.*:.*weirdness')
+        self.assertRegex(
+            str(e), ".*storpool-beacon storpool-block txn.*:.*weirdness"
+        )

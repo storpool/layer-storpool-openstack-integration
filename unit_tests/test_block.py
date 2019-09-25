@@ -10,7 +10,7 @@ import unittest
 
 import mock
 
-root_path = os.path.realpath('lib')
+root_path = os.path.realpath("lib")
 if root_path not in sys.path:
     sys.path.insert(0, root_path)
 
@@ -57,8 +57,10 @@ class MockConfig(object):
         if initializing_config == self:
             return super(MockConfig, self).__setattr__(name, value)
 
-        raise AttributeError('Cannot override the MockConfig '
-                             '"{name}" attribute'.format(name=name))
+        raise AttributeError(
+            "Cannot override the MockConfig "
+            '"{name}" attribute'.format(name=name)
+        )
 
 
 r_config = MockConfig()
@@ -66,7 +68,7 @@ r_config = MockConfig()
 
 def mock_reactive_states(f):
     def inner1(inst, *args, **kwargs):
-        @mock.patch('spcharms.config.m', new=lambda: r_config)
+        @mock.patch("spcharms.config.m", new=lambda: r_config)
         def inner2(*args, **kwargs):
             return f(inst, *args, **kwargs)
 
@@ -82,6 +84,7 @@ class TestStorPoolBlock(unittest.TestCase):
     """
     Test various aspects of the storpool-block layer.
     """
+
     def setUp(self):
         """
         Clean up the reactive states information between tests.
@@ -89,14 +92,15 @@ class TestStorPoolBlock(unittest.TestCase):
         super(TestStorPoolBlock, self).setUp()
 
     @mock_reactive_states
-    @mock.patch('charmhelpers.core.hookenv.config', new=lambda: r_config)
-    @mock.patch('subprocess.call')
-    @mock.patch('spcharms.repo.record_packages')
-    @mock.patch('spcharms.repo.install_packages')
-    @mock.patch('spcharms.status.npset')
-    @mock.patch('spcharms.utils.check_in_lxc')
-    def test_install_package(self, check_in_lxc, npset,
-                             install_packages, record_packages, subcall):
+    @mock.patch("charmhelpers.core.hookenv.config", new=lambda: r_config)
+    @mock.patch("subprocess.call")
+    @mock.patch("spcharms.repo.record_packages")
+    @mock.patch("spcharms.repo.install_packages")
+    @mock.patch("spcharms.status.npset")
+    @mock.patch("spcharms.utils.check_in_lxc")
+    def test_install_package(
+        self, check_in_lxc, npset, install_packages, record_packages, subcall
+    ):
         """
         Test that the layer attempts to install packages correctly.
         """
@@ -116,21 +120,23 @@ class TestStorPoolBlock(unittest.TestCase):
         # Check that it doesn't do anything without a StorPool version
         r_config.r_clear_config()
         check_in_lxc.return_value = False
-        self.assertRaises(sperror.StorPoolNoConfigException,
-                          testee.install_package)
+        self.assertRaises(
+            sperror.StorPoolNoConfigException, testee.install_package
+        )
         self.assertEquals(count_in_lxc + 2, check_in_lxc.call_count)
         self.assertEquals(count_npset + 1, npset.call_count)
         self.assertEquals(count_install, install_packages.call_count)
         self.assertEquals(count_record, record_packages.call_count)
 
         def raise_spe(_):
-            raise sperror.StorPoolPackageInstallException([], 'oops')
+            raise sperror.StorPoolPackageInstallException([], "oops")
 
         # Okay, now let's give it something to install... and fail.
-        r_config.r_set('storpool_version', '0.1.0', False)
+        r_config.r_set("storpool_version", "0.1.0", False)
         install_packages.side_effect = raise_spe
-        self.assertRaises(sperror.StorPoolPackageInstallException,
-                          testee.install_package)
+        self.assertRaises(
+            sperror.StorPoolPackageInstallException, testee.install_package
+        )
         install_packages.side_effect = None
         self.assertEquals(count_in_lxc + 3, check_in_lxc.call_count)
         self.assertEquals(count_npset + 3, npset.call_count)
@@ -146,7 +152,7 @@ class TestStorPoolBlock(unittest.TestCase):
         self.assertEquals(count_record, record_packages.call_count)
 
         # And now for the most common case, something to install...
-        install_packages.return_value = ['storpool-beacon']
+        install_packages.return_value = ["storpool-beacon"]
         testee.install_package()
         self.assertEquals(count_in_lxc + 5, check_in_lxc.call_count)
         self.assertEquals(count_npset + 9, npset.call_count)
@@ -154,13 +160,14 @@ class TestStorPoolBlock(unittest.TestCase):
         self.assertEquals(count_record + 1, record_packages.call_count)
 
     @mock_reactive_states
-    @mock.patch('charmhelpers.core.hookenv.config', new=lambda: r_config)
-    @mock.patch('charmhelpers.core.host.service_resume')
-    @mock.patch('os.path.isfile')
-    @mock.patch('spcharms.utils.check_cgroups')
-    @mock.patch('spcharms.utils.check_in_lxc')
-    def test_enable_and_start(self, check_in_lxc, check_cgroups,
-                              isfile, service_resume):
+    @mock.patch("charmhelpers.core.hookenv.config", new=lambda: r_config)
+    @mock.patch("charmhelpers.core.host.service_resume")
+    @mock.patch("os.path.isfile")
+    @mock.patch("spcharms.utils.check_cgroups")
+    @mock.patch("spcharms.utils.check_in_lxc")
+    def test_enable_and_start(
+        self, check_in_lxc, check_cgroups, isfile, service_resume
+    ):
         """
         Test that the layer enables the system startup service.
         """
@@ -174,13 +181,14 @@ class TestStorPoolBlock(unittest.TestCase):
         self.assertEquals(count_cgroups, check_cgroups.call_count)
 
         def raise_cge(_):
-            raise sperror.StorPoolNoCGroupsException('oops')
+            raise sperror.StorPoolNoCGroupsException("oops")
 
         # Now make sure it doesn't start if it can't find its control group.
         check_in_lxc.return_value = False
         check_cgroups.side_effect = raise_cge
-        self.assertRaises(sperror.StorPoolNoCGroupsException,
-                          testee.enable_and_start)
+        self.assertRaises(
+            sperror.StorPoolNoCGroupsException, testee.enable_and_start
+        )
         check_cgroups.side_effect = None
         self.assertEquals(count_in_lxc + 2, check_in_lxc.call_count)
         self.assertEquals(count_cgroups + 1, check_cgroups.call_count)
@@ -192,7 +200,7 @@ class TestStorPoolBlock(unittest.TestCase):
         testee.enable_and_start()
         self.assertEquals(count_in_lxc + 3, check_in_lxc.call_count)
         self.assertEquals(count_cgroups + 2, check_cgroups.call_count)
-        service_resume.assert_called_once_with('storpool_block')
+        service_resume.assert_called_once_with("storpool_block")
 
         # ...and then with it.
         check_in_lxc.return_value = False
