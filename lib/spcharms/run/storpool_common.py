@@ -8,6 +8,7 @@ import re
 import subprocess
 import tempfile
 
+from charms import reactive
 from charmhelpers.core import hookenv, host, templating
 
 from spcharms import config as spconfig
@@ -163,6 +164,14 @@ def install_package():
         subprocess.call(["systemctl", "daemon-reload"])
         rdebug("reloading the StorPool kernel modules (errors ignored)")
         subprocess.call(["/usr/lib/storpool/update_rdma", "--yes"])
+
+        for pkg in newly_installed:
+            if pkg.startswith("storpool-block-"):
+                reactive.set_state("storpool-block.need-update-rdma")
+                rdebug("scheduling update_rdma for storpool-block")
+            elif pkg.startswith("storpool-beacon-"):
+                reactive.set_state("storpool-beacon.need-update-rdma")
+                rdebug("scheduling update_rdma for storpool-beacon")
     else:
         rdebug("it seems that all the packages were installed already")
 

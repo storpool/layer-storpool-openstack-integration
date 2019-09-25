@@ -6,6 +6,7 @@ from __future__ import print_function
 
 import subprocess
 
+from charms import reactive
 from charmhelpers.core import hookenv
 
 from spcharms import config as spconfig
@@ -97,6 +98,14 @@ def install_package():
             )
         )
         sprepo.record_packages("storpool-osi", newly_installed)
+
+        for pkg in newly_installed:
+            if pkg.startswith("storpool-block-"):
+                rdebug("scheduling update_rdma for storpool-block")
+                reactive.set_state("storpool-block.need-update-rdma")
+            elif pkg.startswith("storpool-beacon-"):
+                rdebug("scheduling update_rdma for storpool-beacon")
+                reactive.set_state("storpool-beacon.need-update-rdma")
     else:
         rdebug("it seems that all the packages were installed already")
 

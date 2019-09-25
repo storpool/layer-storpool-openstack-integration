@@ -7,6 +7,7 @@ from __future__ import print_function
 import os.path
 import subprocess
 
+from charms import reactive
 from charmhelpers.core import host
 
 from spcharms import config as spconfig
@@ -49,19 +50,24 @@ def install_package():
     packages = {"storpool-block-" + spmajmin: "*"}
     newly_installed = sprepo.install_packages(packages)
     if newly_installed:
+        reactive.set_state("storpool-block.need-update-rdma")
         rdebug(
             "it seems we managed to install some packages: {names}".format(
                 names=newly_installed
             )
         )
         sprepo.record_packages("storpool-block", newly_installed)
+    else:
+        rdebug("it seems that all the packages were installed already")
 
+    if reactive.is_state("storpool-block.need-update-rdma"):
+        reactive.remove_state("storpool-block.need-update-rdma")
         rdebug("reloading the systemd database (errors ignored)")
         subprocess.call(["systemctl", "daemon-reload"])
         rdebug("reloading the StorPool kernel modules (errors ignored)")
         subprocess.call(["/usr/lib/storpool/update_rdma", "--yes"])
     else:
-        rdebug("it seems that all the packages were installed already")
+        rdebug("no reload needed")
 
     spstatus.npset("maintenance", "")
 
@@ -87,6 +93,7 @@ def run():
     """
     Invoke install_package() and enable_and_start() as needed.
     """
+    reactive.remove_state("storpool-block.need-update-rdma")
     rdebug("Run, beacon, run!")
     run_beacon.run()
     rdebug("Returning to the storpool_block setup")
