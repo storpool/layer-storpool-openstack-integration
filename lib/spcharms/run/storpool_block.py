@@ -85,6 +85,8 @@ def enable_and_start():
 
     rdebug("enabling and starting the block service")
     host.service_resume("storpool_block")
+    if os.path.exists("/lib/systemd/system/storpool_mirror_mount.service"):
+        host.service_resume("storpool_mirror_mount")
     if os.path.isfile("/usr/sbin/storpool_stat.bin"):
         host.service_resume("storpool_stat")
 
