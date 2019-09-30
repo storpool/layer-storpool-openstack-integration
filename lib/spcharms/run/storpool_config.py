@@ -74,7 +74,6 @@ def install_package():
         "maintenance", "installing the StorPool configuration packages"
     )
     packages = {
-        "confget": "*",
         "txn-install": "*",
         "storpool-config-" + spmajmin: "*",
         "netplan-parser": "*",
