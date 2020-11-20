@@ -134,21 +134,21 @@ def presence_update(relname, data):
             except UnsupportedFormatError:
                 hookenv.log(
                     "Unsupported presence format from node {u} on "
-                    + "relation {name}".format(u=unit, name=name),
+                    "relation {name}".format(u=unit, name=name),
                     hookenv.ERROR,
                 )
                 continue
             except ValidationError as e:
                 hookenv.log(
                     "Invalid presence data from node {u} on "
-                    + "relation {name}: {e}".format(u=unit, name=name, e=e),
+                    "relation {name}: {e}".format(u=unit, name=name, e=e),
                     hookenv.ERROR,
                 )
                 continue
             except Exception as e:
                 hookenv.log(
                     "Could not unserialize the presence data from "
-                    + "unit {u} on relation {name}: {e}".format(
+                    "unit {u} on relation {name}: {e}".format(
                         name=name, u=unit, e=e
                     ),
                     hookenv.ERROR,
