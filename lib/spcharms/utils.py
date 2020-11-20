@@ -201,3 +201,32 @@ def exec(cmd):
     output = p.communicate()[0].decode()
     res = p.returncode
     return {"res": res, "out": output}
+
+
+def check_systemd_service(name, in_lxc=False):
+    """
+    Check for a systemd service with the specified name.
+    """
+    service = "{name}.service".format(name=name)
+    spstatus.npset(
+        "maintenance",
+        "checking for the {name} service".format(name=name),
+    )
+    if in_lxc or check_in_lxc():
+        rdebug(
+            "running in an LXC container, not checking for " + service,
+            prefix=name,
+        )
+        return
+
+    lines = (
+        subprocess.check_output(
+            ["systemctl", "show", "-p", "Type", service],
+            shell=False,
+        )
+        .decode("UTF-8")
+        .splitlines()
+    )
+    rdebug("got {lines}".format(lines=repr(lines)), prefix=name)
+    if len(lines) != 1 or lines[0] not in ("Type=forking", "Type=simple"):
+        raise sperror.StorPoolMissingComponentsException([service])

@@ -68,6 +68,28 @@ class StorPoolPackageInstallException(Exception):
         )
 
 
+class StorPoolMissingComponentsException(Exception):
+    """
+    Some of the prerequisites (usually a StorPool package) is
+    not installed.
+    """
+
+    def __init__(self, names):
+        """
+        Create a missing component exception with the specified list of
+        components.
+        """
+        self.names = names
+
+    def __str__(self):
+        """
+        Show the names of the missing components.
+        """
+        return "Missing StorPool components: {names}".format(
+            names=" ".join(self.names)
+        )
+
+
 class StorPoolException(Exception):
     """
     A generic exception raised by the StorPool charm routines.
