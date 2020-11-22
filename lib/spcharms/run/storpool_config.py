@@ -7,6 +7,8 @@ from spcharms import config as spconfig
 from spcharms import status as spstatus
 from spcharms import utils as sputils
 
+from spcharms.run import storpool_repo_add as run_repo
+
 
 def rdebug(s, cond=None):
     """
@@ -47,6 +49,8 @@ def read_config():
 
 
 def run():
+    rdebug("Run, repo, run!")
+    run_repo.run()
     rdebug("Returning to the storpool-config setup")
     read_config()
 
@@ -57,4 +61,5 @@ def stop():
     """
     rdebug("storpool-config.stop invoked")
 
-    # Nothing to do now that we no longer use the storpool-maas repo.
+    rdebug("let the storpool-repo layer know that we are shutting down")
+    run_repo.stop()
